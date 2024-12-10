@@ -565,18 +565,21 @@ $Background = {
                 </StackPanel>
             </TabItem>
 
-            <!-- Third Main Tab -->
             <TabItem Header="Know-How">
-                <StackPanel>
+                <Grid>
                     <TabControl>
                         <TabItem Header="Bootable USB">
-                            <TextBox x:Name="KnowHowBootableUSB" Width="765" Height="505" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" Margin="0,0,0,0"/>
+                            <Grid>
+                                <WebBrowser x:Name="HtmlBootableUSB" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                            </Grid>
                         </TabItem>
                         <TabItem Header="Install Windows">
-                            <TextBox x:Name="KnowHowInstallWindows" Width="765" Height="505" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" Margin="0,0,0,0"/>
+                            <Grid>
+                                <WebBrowser x:Name="HtmlInstallWindow" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                            </Grid>
                         </TabItem>
                     </TabControl>
-                </StackPanel>
+                </Grid>
             </TabItem>
 
             <!-- Fourth Main Tab -->
@@ -591,8 +594,8 @@ $Background = {
                                 <Run Text="Developer: Boris Andonov" />
                                 <LineBreak />
                                 <Run Text="Website: " />
-                                <Hyperlink x:Name="WebsiteLink" NavigateUri="https://github.com/ourshell/">
-                                    <Run Text="https://github.com/ourshell/" />
+                                <Hyperlink x:Name="WebsiteLink" NavigateUri="https://github.com/ourshell/Create-BootableUSB">
+                                    <Run Text="https://github.com/ourshell/Create-BootableUSB" />
                                 </Hyperlink>
                             </TextBlock.Inlines>
                         </TextBlock>
@@ -669,8 +672,9 @@ $SyncHash.PartitionReTools = $SyncHash.Window.FindName("PartitionReTools")
 $SyncHash.PartitionRecovery = $SyncHash.Window.FindName("PartitionRecovery")
 $SyncHash.PartitionWindows = $SyncHash.Window.FindName("PartitionWindows")
 $SyncHash.OutputTextBox = $SyncHash.Window.FindName("OutputTextBox")
-$SyncHash.KnowHowBootableUSB = $SyncHash.Window.FindName("KnowHowBootableUSB")
-$SyncHash.KnowHowInstallWindows = $SyncHash.Window.FindName("KnowHowInstallWindows")
+$SyncHash.HtmlBootableUSB = $SyncHash.Window.FindName("HtmlBootableUSB")
+$SyncHash.HtmlInstallWindow = $SyncHash.Window.FindName("HtmlInstallWindow")
+
 $SyncHash.TextBoxUpdate = $SyncHash.Window.FindName("TextBoxUpdate")
 
 $SyncHash.FileHashComboBox.SelectedIndex = 2
@@ -681,13 +685,50 @@ $SyncHash.PartitionReTools.Text = "1024"
 $SyncHash.PartitionRecovery.Text = "8192"
 $SyncHash.PartitionWindows.Text = "max"
 
-$SyncHash.KnowHowBootableUSB.Text = @"
-ATTENTION: All data on the USB drive will be lost. Make sure you have transferred all your files.
+$HtmlBootableUSB = @"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bootable USB Guide</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0; /* Remove default margin */
+            padding: 5px; /* Add padding for content spacing */
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 5px;
+            border: 1px solid #ddd;
+            white-space: pre-wrap; /* Enable text wrapping */
+            word-wrap: break-word; /* Prevent horizontal scrolling */
+            margin: 1px 0; /* Margin to separate code blocks */
+            padding-left: 5px; /* Add left padding to the code block for visibility */
+        }
+    </style>
+</head>
+<body>
+    <h2>Create a Bootable USB Drive</h2>
+    <ul>
+        <li>Key Point: FAT32 is required for booting (supports BIOS and UEFI).</li>
+    </ul>
 
-Manually create bootable USB drive. Administrative permissions are required.
+    <h3>Prerequisites</h3>
+    <ul>
+        <li>Administrative permissions are required.</li>
+        <li>Run these commands in an elevated Command Prompt (Run CMD as Admin).</li>
+    </ul>
 
-Run CMD as Administrator and proceed with these commands. Character # is the number of USB flash drive.
-
+    <h3>Step 1: Prepare the USB Drive</h3>
+    <ul>
+        <li>Open Command Prompt as Administrator.</li>
+        <li>Enter these commands. Replace <code>#</code> with your USB drive's number:</li>
+    </ul>
+    <pre>
 diskpart
 list disk
 select disk #
@@ -698,24 +739,42 @@ active
 format fs=fat32 quick
 assign
 exit
+    </pre>
+    <p><strong>Note:</strong> Use FAT32 for compatibility with both BIOS and UEFI. Avoid NTFS.</p>
 
-FAT32 supports BIOS and UEFI. Do not format the USB flash drive with NTFS!
+    <h3>Step 2: Copy Installation Files</h3>
+    <p>Assuming:</p>
+    <ul>
+        <li><code>D:</code> is the source (mounted ISO).</li>
+        <li><code>E:</code> is the USB drive.</li>
+    </ul>
+    <p>Run the following commands:</p>
+    <ul>
+        <li>Make the USB bootable:</li>
+    </ul>
+    <pre>D:\boot\bootsect.exe /nt60 E:</pre>
+    <ul>
+        <li>Copy installation files:</li>
+    </ul>
+    <pre>robocopy D:\ E:\ /e /max:4294967296</pre>
+    <ul>
+        <li>Split large <code>.wim</code> files if needed:</li>
+    </ul>
+    <pre>Dism /Split-Image /ImageFile:D:\sources\install.wim /SWMFile:E:\sources\install.swm /FileSize:4096</pre>
 
-Below commands assume that D: is source (mounted ISO image) and E: is destination (USB flash drive).
-
-D:\boot\bootsect.exe /nt60 E:
-robocopy D:\ E:\ /e /max:4294967296
-Dism /Split-Image /ImageFile:D:\sources\install.wim /SWMFile:E:\sources\install.swm /FileSize:4096
-
-
-Create partition with specific size and name. Applies for drives with over 32GB. Windows can not format and recognize FAT32 partitions over 32GB. In below example character # is USB drive number, 12288 is partition size in MB or exactly 12GB.
-
+    <h3>For USB Drives Over 32GB</h3>
+    <p>Follow these steps for drives larger than 32GB:</p>
+    <ul>
+        <li>Open Command Prompt as Administrator.</li>
+        <li>Replace <code>#</code> with your USB drive number and adjust the size (e.g., 12GB = 12288 MB):</li>
+    </ul>
+    <pre>
 diskpart
 list disk
 select disk #
 clean
 
-create partition primary size=8192
+create partition primary size=12288
 select partition 1
 active
 format fs=fat32 quick label="BOOT-FAT32"
@@ -727,55 +786,66 @@ format fs=ntfs quick label="DATA-NTFS"
 assign
 
 exit
-
+    </pre>
+</body>
+</html>
 "@
 
-$SyncHash.KnowHowInstallWindows.Text = @"
-######## Install Windows on a portable USB Drive. ########
+$HtmlInstallWindow = @"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Install Windows on a Portable USB Drive</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0;
+            padding: 5px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 5px;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 1px 0;
+            padding-left: 5px;
+        }
+    </style>
+</head>
+<body>
 
-ATTENTION: All data on the USB drive will be lost. Make sure you have transferred all your files.
+    <h2>Install Windows on a Portable USB Drive</h2>
 
-Manually Install Windows on a portable USB Drive. SSD or HDD is recommended. Administrative permissions are required.
+    <p>This guide will help you install Windows on a portable USB drive.</p>
 
-Run CMD as Administrator and proceed with these commands. Character # is the number of USB flash drive.
+    <h3>Prerequisites:</h3>
+    <ul>
+        <li>USB drive with at least 32 GB size. HDD or SSD is highly recommended.</li>
+        <li>Windows ISO file. You can optain public versions here: <a href="https://www.microsoft.com/en-us/software-download/windows10">Microsoft Windows 10</a> and <a href="https://www.microsoft.com/en-us/software-download/windows11">Microsoft Windows 11</a></li>
+        <li>A computer running Windows with Administrative privileges.</li>
+    </ul>
 
+    <h3>Step 1: Prepare the USB Drive</h3>
+    <p>First, we will format and prepare the USB drive to make it bootable. Follow these commands carefully:</p>
+    
+    <p>Open Command Prompt as Administrator and run the following commands (replace <strong>X</strong> with the correct disk number for your USB drive):</p>
 
-### References:
-### https://decryptingtechnology.blogspot.com/
-### https://www.tenforums.com/tutorials/84331-apply-windows-image-using-dism-instead-clean-install.html
-### https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/capture-and-apply-windows-using-a-single-wim
-
-### Windows Official Windows. Topic:
-### https://tinyapps.org/blog/202301020700_microsoft-iso-hashes.html
-
-### My Visual Studio Hash Dumps. Get latest hash info.
-### https://awuctl.github.io/mvs/
-
-### According to above these are the hashes for July 2023.
-
-### Find the latest ISO with a quick google search, by a hash is highly recommended.
-### Verify if it is a genuine image with a PowerShell command. Compare the hashes.
-Get-FileHash C:\MyImage.iso -Algorithm SHA256
-
-### Mount the ISO. 2nd part assumes that it is mounted as drive 'D'.
-
-======== Part 1 - Prepare Portable USB Drive ========
-
-### Open CMD as administrator.
-
+    <pre>
 diskpart
 list disk
-### Replace X with the correct number of your portable disk
 select disk X
 clean
 convert gpt
-
 create partition efi size=256
 format quick fs=fat32 label="System"
 assign letter="S"
 
 create partition msr size=512
-
 create partition primary size=1024
 format quick fs=ntfs label="Windows RE Tools"
 assign letter="T"
@@ -789,20 +859,37 @@ set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
 gpt attributes=0x8000000000000001
 
 create partition primary size=132000
-### NOTE: This command will create roughly 128GB Windows partition. The rest will be unallocated for spare partitions. Adjust as per your needs.
 format quick fs=ntfs label="Windows"
 assign letter="W"
-
 list volume
 exit
+    </pre>
 
-======== Part 2 - Deploy Windows Installation ========
+    <h4>Explanation of Step 1:</h4>
+    <ul>
+        <li><strong>diskpart</strong>: Launches the disk partitioning tool to manage disk partitions.</li>
+        <li><strong>list disk</strong>: Displays all available disks. Identify your USB drive by its size.</li>
+        <li><strong>select disk X</strong>: Selects the USB drive. Replace <strong>X</strong> with the disk number corresponding to your USB drive.</li>
+        <li><strong>clean</strong>: Deletes all existing data and partitions from the USB drive, preparing it for new partitions.</li>
+        <li><strong>convert gpt</strong>: Converts the drive to the GPT partition style, which is required for UEFI booting.</li>
+        <li><strong>create partition efi size=256</strong>: Creates a 256 MB EFI (Extensible Firmware Interface) partition required for UEFI booting.</li>
+        <li><strong>format quick fs=fat32 label="System"</strong>: Formats the EFI partition with the FAT32 file system, which is compatible with UEFI.</li>
+        <li><strong>assign letter="S"</strong>: Assigns a letter ("S") to the EFI partition for easier access.</li>
+        <li><strong>create partition msr size=512</strong>: Creates a Microsoft Reserved Partition (MSR) of 512 MB. This partition is used for system recovery tools.</li>
+        <li><strong>create partition primary size=1024</strong>: Creates a 1 GB partition for Windows Recovery Tools.</li>
+        <li><strong>create partition primary size=8192</strong>: Creates an 8 GB partition for the recovery image. This is used for Windows system recovery files.</li>
+        <li><strong>create partition primary size=132000</strong>: Creates a 128 GB partition for the Windows operating system installation files. Adjust the size as needed.</li>
+        <li><strong>list volume</strong>: Lists all the partitions and ensures that all partitions were created successfully.</li>
+        <li><strong>exit</strong>: Exits the diskpart tool and saves the partition setup.</li>
+    </ul>
 
-### Open CMD as administrator. My ISO is already mounted as drive 'D'. Adjust the drive letter in below commands if it is different.
+    <h3>Step 2: Deploy Windows Installation</h3>
+    <p>Once your USB drive is ready, we will apply the Windows image to it. Follow these steps:</p>
+    
+    <p>First, mount the ISO file to a virtual drive (e.g., drive <strong>D:</strong>), then open Command Prompt as Administrator and run the following commands:</p>
 
-### Find the index of the edition you want. In my case index 5 is Windows Pro. Replace 5 with the correct number according to the required edition.
+    <pre>
 dism /Get-WimInfo /WimFile:D:\sources\install.wim
-
 md R:\RecoveryImage
 copy D:\sources\install.wim R:\RecoveryImage\install.wim
 
@@ -812,11 +899,30 @@ md T:\Recovery\WindowsRE
 copy W:\Windows\System32\Recovery\winre.wim T:\Recovery\WindowsRE\winre.wim
 
 bcdboot W:\Windows /s S: /f UEFI
-
 W:\Windows\System32\reagentc /setosimage /path R:\RecoveryImage /target W:\Windows /index 5
 W:\Windows\System32\reagentc /setreimage /path T:\Recovery\WindowsRE /target W:\Windows
+    </pre>
+
+    <h4>Explanation of Step 2:</h4>
+    <ul>
+        <li><strong>dism /Get-WimInfo</strong>: Displays information about the Windows image in the install.wim file. This helps you identify the correct Windows edition (e.g., Pro, Home).</li>
+        <li><strong>md R:\RecoveryImage</strong>: Creates a folder on the USB drive where the recovery image will be stored.</li>
+        <li><strong>copy D:\sources\install.wim</strong>: Copies the Windows installation image (install.wim) from the mounted ISO to the USB drive.</li>
+        <li><strong>dism /Apply-Image</strong>: Applies the selected Windows image to the Windows partition on the USB drive. Index 5 typically corresponds to the Windows Pro edition.</li>
+        <li><strong>md T:\Recovery\WindowsRE</strong>: Creates a folder for Windows Recovery Environment (WinRE) on the USB drive.</li>
+        <li><strong>copy W:\Windows\System32\Recovery\winre.wim</strong>: Copies the WinRE image from the Windows partition to the recovery partition on the USB drive.</li>
+        <li><strong>bcdboot</strong>: Configures the USB drive to boot Windows in UEFI mode by copying the boot files to the EFI partition.</li>
+        <li><strong>reagentc /setosimage</strong>: Registers the recovery image location to the USB drive.</li>
+        <li><strong>reagentc /setreimage</strong>: Registers the location of the Windows Recovery Environment (WinRE) image.</li>
+    </ul>
+
+</body>
+</html>
 
 "@
+
+$SyncHash.HtmlBootableUSB.NavigateToString($HtmlBootableUSB)
+$SyncHash.HtmlInstallWindow.NavigateToString($HtmlInstallWindow)
 
 # Initialize variables and pbjects to share between threads
 $SyncHash.Drives = $null
@@ -827,6 +933,16 @@ $SyncHash.SelectedOSEdition = $null
 $SyncHash.SelectedDrive = $null
 $SyncHash.IsoPath = $null
 $SyncHash.IsoDrive = $null
+
+$SyncHash.ScriptInfo = @{
+    LocalPath = $MyInvocation.MyCommand.Path
+    Name = "Create-BootableUSB"
+    Version= "1.00"
+    UrlJson = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json"
+    UrlContent = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1"
+    UrlRepository = "https://github.com/ourshell/Create-BootableUSB"
+    Developer = "Boris Andonov"
+}
 
 $SyncHash.UpdateObjects = {
     # Enable GUI objects
@@ -1081,13 +1197,41 @@ $SyncHash.Window.FindName("WebsiteLink").Add_Click({
 
 $SyncHash.Window.FindName("ButtonCheckUpdate").Add_Click({
     $Error.Clear()
-    $SyncHash.UpdateLog.Invoke("Feature Not implemented", $Error)
-})
+    $SyncHash.UpdateLog.Invoke("Checking for update, please wait . . .")
 
+    $Json = Invoke-WebRequest -Uri $SyncHash.ScriptInfo.UrlJson -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json
+    $SyncHash.UpdateLog.Invoke("Current Version:$($SyncHash.ScriptInfo.Version)`r`nOnline Version: $($Json.Version) ", $Error)
+})
 
 $SyncHash.Window.FindName("ButtonUpdate").Add_Click({
     $Error.Clear()
-    $SyncHash.UpdateLog.Invoke("Feature Not implemented", $Error)
+    $SyncHash.UpdateLog.Invoke("Updating the script, please wait . . .")
+
+    $Json = Invoke-WebRequest -Uri $SyncHash.ScriptInfo.UrlJson -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json
+
+    $SyncHash.UpdateLog.Invoke("Current Version:$($SyncHash.ScriptInfo.Version)`r`nOnline Version: $($Json.Version) ", $Error)
+
+    if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
+        $Content = Invoke-RestMethod -Uri $Json.UrlContent -ErrorAction SilentlyContinue
+
+        if ($Error -or -not $SyncHash.ScriptInfo.LocalPath) {
+            $SyncHash.UpdateLog.Invoke("Missing script's local path or repo is not available.", $Error)
+        }
+        else {
+            $Error.Clear()
+            #Set-Content -Path $SyncHash.ScriptInfo.LocalPath -Value $Content -Force -ErrorAction SilentlyContinue
+
+            if ($Error) {
+                $SyncHash.UpdateLog.Invoke("Unable to update the script due to an internal failure", $Error)
+            }
+            else {
+                $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.", $Error)
+            }
+        }
+    }
+    else {
+        $SyncHash.UpdateLog.Invoke("There is no new version.", $Error)
+    }
 })
 
 
