@@ -1,6 +1,6 @@
 {
   "Name": "Create-BootableUSB",
-  "Version": "1.01",
+  "Version": "1.02",
   "UrlJson": "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json",
   "UrlContent": "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1",
   "UrlRepository": "https://github.com/ourshell/Create-BootableUSB",
