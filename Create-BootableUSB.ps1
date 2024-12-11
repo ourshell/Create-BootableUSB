@@ -20,6 +20,54 @@ else {
 
 #### Define the main logic in following script blocks to execute in a runspace ####
 
+# Logic to check for update
+
+$ScriptUpdate = {
+    param ([string]$Action)
+
+    $SyncHash.UpdateLog.Invoke("Checking for new version, please wait . . .", $Error)
+
+    $Json = Invoke-RestMethod -Uri $SyncHash.ScriptInfo.Json -UseBasicParsing -Method Get
+    $SyncHash.UpdateLog.Invoke("Local Version:$($SyncHash.ScriptInfo.Version)`r`nLatest Version: $($Json.Version) ", $Error)
+
+    if ($Action -eq "ButtonUpdate") {
+        if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
+            <# Notes for future and faster approach
+
+            $WebClient = New-Object System.Net.WebClient
+            $RawContent = $WebClient.DownloadString($Json.Content)
+            $WebClient.Dispose()
+
+            $HttpClient = [System.Net.Http.HttpClient]::new()
+            $RawContent = $HttpClient.GetStringAsync($Json.Content).Result
+            $HttpClient.Dispose()
+            #>
+
+            $Content = (Invoke-WebRequest -Uri $Json.Content -UseBasicParsing -ErrorAction SilentlyContinue).Content
+
+            if ($Error -or -not $SyncHash.ScriptInfo.LocalPath -or -not $Content) {
+                $SyncHash.UpdateLog.Invoke("Missing script's local path or repo is not available.", $Error)
+            }
+            else {
+                #Set-Content -Path $SyncHash.ScriptInfo.LocalPath -Value $Content -Force -ErrorAction SilentlyContinue
+
+                if ($Error) {
+                    $SyncHash.UpdateLog.Invoke("Unable to update the script due to an internal error", $Error)
+                }
+                else {
+                    $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.", $Error)
+                }
+            }
+        }
+        else {
+            $SyncHash.UpdateLog.Invoke("There is no new version.", $Error)
+        }
+    }
+    else {
+        $SyncHash.UpdateLog.Invoke("If there is a new version you can proceed with update.", $Error)
+    }
+}
+
 # Logic to verify the image
 $GetImageHealth = {
     $output = "================ Begin: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n"
@@ -238,8 +286,6 @@ exit
     $SyncHash.WriteOutput.Invoke("Finished!", $Error)
     $Error.Clear()
 
-    #### HEAVY CODE ENDS HERE ####
-
     # Enable GUI objects after completion
     $SyncHash.Window.Dispatcher.Invoke([action] {
         & $SyncHash.UpdateObjects
@@ -268,8 +314,6 @@ $InstallWindowsOnDrive = {
 
     $SyncHash.WriteOutput.Invoke($output, $Error)
     $Error.Clear()
-
-    #### HEAVY CODE STARTS HERE ####
 
     Clear-Disk -Number $SyncHash.SelectedDrive.Index -RemoveData -RemoveOEM -Confirm:$false
     Start-Sleep -Seconds 1
@@ -413,8 +457,6 @@ exit
     $SyncHash.WriteOutput.Invoke($output, $Error)
     $Error.Clear()
 
-    #### HEAVY CODE ENDS HERE ####
-
     # Enable GUI objects after completion
     $SyncHash.Window.Dispatcher.Invoke([action] {
         & $SyncHash.UpdateObjects
@@ -429,10 +471,13 @@ $Background = {
 
     # Create a new PowerShell instance and add particular scriptblock to it.
 
-    if ($ClickedButton -eq "GetImageHealth") {
+    if ($ClickedButton -eq "ButtonCheckUpdate" -or $ClickedButton -eq "ButtonUpdate") {
+        $psInstance = [PowerShell]::Create().AddScript($ScriptUpdate)
+        $psInstance.AddArgument($ClickedButton)
+    }
+    elseif ($ClickedButton -eq "GetImageHealth") {
         $psInstance = [PowerShell]::Create().AddScript($GetImageHealth)
     }
-    
     elseif ($ClickedButton -eq "GetFileHash") {
         $psInstance = [PowerShell]::Create().AddScript($GetFileHash)
         $psInstance.AddArgument($SyncHash.FileHashComboBox.Text)
@@ -470,220 +515,6 @@ $Background = {
     $psInstance.Runspace = $runspace
     $psInstance.BeginInvoke()
 }
-
-# Define the XAML layout for the WPF window
-
-[xml]$xaml = @"
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Create-BootableUSB | Create bootable USB Drive or install Windows on it." Width="800" Height="600" ResizeMode="NoResize" WindowStartupLocation="CenterScreen" ShowInTaskbar="True">
-
-    <Window.TaskbarItemInfo> 
-        <TaskbarItemInfo/>
-    </Window.TaskbarItemInfo>
-
-    <Grid>
-        <!-- Tab Control -->
-        <TabControl VerticalAlignment="Top" Margin="0,0,0,0">
-            <!-- First Main Tab -->
-            <TabItem Header="General">
-                <StackPanel Margin="5" HorizontalAlignment="Left">
-                    <!-- Drive Selection -->
-                    <TextBlock Text="Select Target Drive" Margin="0,0,0,5"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <ComboBox x:Name="DriveComboBox" Width="660" Height="25"/>
-                        <Button x:Name="RefreshButton" Content="Refresh" Width="75" Height="25" Margin="25,0,0,0"/>
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                        <TextBlock Text="Select ISO Image" Margin="0,0,0,0"/>
-                        <TextBlock Text="Hash Algorithm" Margin="50,0,0,0"/>
-                        <TextBlock Margin="80,0,0,0">
-                            <Run Text="Select Edition. Applies to '"/> <Run Text="Install Windows on Drive" FontWeight="Bold"/> <Run Text="' only!"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <!-- ISO Selection -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,5,0,5">
-                        <Button x:Name="BrowseButton" Content="Browse" Width="100" Height="25" Margin="0,0,0,0"/>
-                        <ComboBox x:Name="FileHashComboBox" Width="120" Height="25" Margin="40,0,0,0">
-                            <ComboBoxItem Content="MD5"/>
-                            <ComboBoxItem Content="SHA1"/>
-                            <ComboBoxItem Content="SHA256"/>
-                            <ComboBoxItem Content="SHA384"/>
-                            <ComboBoxItem Content="SHA512"/>
-                        </ComboBox>
-                        <ComboBox x:Name="OSEditionsComboBox" Width="360" Height="25" Margin="40,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Show File Path -->
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock x:Name="IsoPathText" Text="Path: [EMPTY]" Margin="0,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Start Buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button x:Name="FileHashButton" Content="Get Hash" Width="75" Height="25" Margin="0,0,0,0"/>
-                        <Button x:Name="ButtonBootable" Content="Create Bootable Drive" Width="130" Height="25" Margin="50,0,0,0"/>
-                        <Button x:Name="ButtonInstall" Content="Install Windows on Drive" Width="160" Height="25" Margin="50,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Big Text Box-->
-                    <StackPanel Margin="0, 10, 0, 0" HorizontalAlignment="Left">
-                        <TextBox x:Name="OutputTextBox" Width="765" Height="355" Margin="0,0,0,10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AcceptsReturn="True" IsReadOnly="True"/>
-                    </StackPanel>
-                </StackPanel>
-            </TabItem>
-
-            <!-- Second Main Tab -->
-            <TabItem Header="Options">
-                <StackPanel Margin="10" HorizontalAlignment="Left">
-                    <!-- Five TextBoxes with labels above each box -->
-                    <TextBlock Text="Values in MB for each partition of Windows Preinstallation Environment" Margin="0,0,0,10"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,10">
-                        <StackPanel>
-                            <TextBlock Text="EFI" HorizontalAlignment="Center" Margin="5,0"/>
-                            <TextBox x:Name="PartitionEFI" Width="60" Height="20" Margin="5,0"/>
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="MSR" HorizontalAlignment="Center" Margin="5,0"/>
-                            <TextBox x:Name="PartitionMSR" Width="60" Height="20" Margin="5,0"/>
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="RE Tools" HorizontalAlignment="Center" Margin="5,0"/>
-                            <TextBox x:Name="PartitionReTools" Width="60" Height="20" Margin="5,0"/>
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Recovery" HorizontalAlignment="Center" Margin="5,0"/>
-                            <TextBox x:Name="PartitionRecovery" Width="60" Height="20" Margin="5,0"/>
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Windows" HorizontalAlignment="Center" Margin="5,0"/>
-                            <TextBox x:Name="PartitionWindows" Width="60" Height="20" Margin="5,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </TabItem>
-
-            <TabItem Header="Know-How">
-                <Grid>
-                    <TabControl>
-                        <TabItem Header="Bootable USB">
-                            <Grid>
-                                <WebBrowser x:Name="HtmlBootableUSB" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                            </Grid>
-                        </TabItem>
-                        <TabItem Header="Install Windows">
-                            <Grid>
-                                <WebBrowser x:Name="HtmlInstallWindow" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                            </Grid>
-                        </TabItem>
-                    </TabControl>
-                </Grid>
-            </TabItem>
-
-            <!-- Fourth Main Tab -->
-            <TabItem Header="Support">
-                <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Margin="0,0,0,0">
-                    <!-- Row with TextBlock and Buttons -->
-                    
-                        <TextBlock Margin="5,5,0,0">
-                            <TextBlock.Inlines>
-                                <Run Text="Version: 1.00 alpha" />
-                                <LineBreak/>
-                                <Run Text="Developer: Boris Andonov" />
-                                <LineBreak />
-                                <Run Text="Website: " />
-                                <Hyperlink x:Name="WebsiteLink" NavigateUri="https://github.com/ourshell/Create-BootableUSB">
-                                    <Run Text="https://github.com/ourshell/Create-BootableUSB" />
-                                </Hyperlink>
-                            </TextBlock.Inlines>
-                        </TextBlock>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
-                        <Button x:Name="ButtonCheckUpdate" Content="Check For Update" Width="130" Height="25" Margin="50,0,10,0" />
-                        <Button x:Name="ButtonUpdate" Content="Update" Width="130" Height="25" Margin="50,0,0,0" />
-                    </StackPanel>
-
-                    <TextBox x:Name="TextBoxUpdate" Width="770" Height="410" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" HorizontalAlignment="Left" Margin="5,20,0,10"/>
-                </StackPanel>
-            </TabItem>
-
-
-
-
-        </TabControl>
-    </Grid>
-</Window>
-"@
-
-# Create synchronized hashtable to share data between different threads or runspaces
-$SyncHash = [Hashtable]::Synchronized(@{})
-
-# Load the XAML and bind controls
-$XmlReader = New-Object System.Xml.XmlNodeReader $xaml
-
-# Retrieve WPF elements
-$SyncHash.Window = [System.Windows.Markup.XamlReader]::Load($XmlReader)
-
-# Set custom icon using base64-encoded data
-$Base64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAACXEAAAlxAYZ2/isAAAAZdEVYdFNvZnR3YXJlAHd3dy5pbmtzY2FwZS5vcmeb7jwaAAABh2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFj
-a2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4NCjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iPjxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+PHJkZjpEZXNjcmlwdGl
-vbiByZGY6YWJvdXQ9InV1aWQ6ZmFmNWJkZDUtYmEzZC0xMWRhLWFkMzEtZDMzZDc1MTgyZjFiIiB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+PHRpZmY6T3JpZW50YXRpb24+MTwvdGlmZjpPcmllbnRhdGlvbj48L3JkZjpEZXNjcmlwdGlvbj48L3JkZjpSRE
-Y+PC94OnhtcG1ldGE+DQo8P3hwYWNrZXQgZW5kPSd3Jz8+LJSYCwAABNtJREFUWEedlluIVlUUx39r7++cbxwdR9TEaxfNGKjIQDFDfEpKDF+iAnsQgh6NHooIH8IevFDRQyoh+KJUUPYQmRBdyS4PQUQEmvoQBV6SUcdxZr7L2Wv1sM83frPnm3G+/rDhcPa6/Nd/rb3PgS4QDskePepO6xG/J
-d37v3Dpi+lgKudFZEDgpL7n37d3mJfadIuuCDjTT8Mg1xgDydiuuTulB7g3tesG3RHYyaCYfY+HcB2clwfAf6Pvcl9qO1N0RQAAld8wQCHcABFZYYU/cf1t5qemM0HXBAS5jgqogAk6DC6X1X2hcii1nQm6JxBsMQGkXCjYDXA5z+qbfmtqfzt0TUCbsp5mqUC5LAgUAk3Zb99SSX2mQ1cEbG91
-JcgGxmLl7ctGQapyv/2cPQ2ge/Inw57K8TRGiq4IaENfchlVLYAwcVkAGmBNXiS2aqOb757S3ZWX0zjtkPRFC7qfPkazV5nT3OteYUTfyB4E+YVA1TS1jnASubgsPGZNd9DlMmBKvRFY07O7cSa1Z1oFbvq1Mt/tYijbCmCFHBOhakUpewBaz+XSAE4Rq/uPnMmAjoJ4qlmwt9LwLUxJIAT/HHU
-wlW1hV37MVXhIR8pkTaBq2IIQSZSnAY2tcLDACsDAboLzstV2VTamOZiqBfo6i6yen3MiczGgAtpoMzCwpQXMVuRyBYbcNKWA6wWt8bHfV39m0l76AkBq+fMud3O1GSuyWpvUDaBfYZZBIdi8WHK7CpPWGFDwhL7GHWmuSQR0J1UteIG6jUtq7clna5Q+RCXIwPpDbEtrNhIy1gSX00czfzTNN4
-kAWXWT824ldUFCuVSQhsAsw5aEmLgFBeYqUuGWLYIU5XMQCALmQGVtmyd0JBB4HJF4rtsr7zFsRQG+rLyFlgqzDWqC9Sq6qgEVu6WKjp+YVW2e0JmArJnkmBt6V5lcU4cSszTKPT9EsovKNrXiBKApt58BVBZGAi3pBF1RQB5noiMMrGrY8gL6DOqC9Sv0GuPfjUIgSE/q2oEAMs64IXHg+jQqM
-RW0bFGragBnkUQRr0cMLJ6HCZhMoOBG/MqVQRaEqEQnWDIP7QqZYHMUpFQuFnW1zQI6EjDOIhKly+KNNyFJC63+piRaUCCzODdFbKUYZ1OzyQQK+Y7yZ8O8RYs0QQCqwCbgkWlIuHjXSojXdzB3qpPJRKg/qWM2hJS9S2HlBb4eWAbcCSwqT0snBMAJWre//dDID+n2JALu2PCgqBwmE2TMxcDt
-I9AAVgFLyyvWgOUdFBBiG2sOvCDKQXd8JkMIUPX7rMYFaTgYduDL6FZKf09bxQWwGOhNhtAbMuSQIFjNzklv/4G23XF0JOCO3Lgq2A4KwV+q3LIKQB8wp3ymTDoHWNFGSiJZdynDAk0s7JDDF0fL3QnoSABAPhj5ypQdXMzwV7J4GiBOdeoVgLuBvFQpN/zFHLviA8p292Ht58RjHGmoCXDHh4/
-aGNvs9/yiH6ngZxuMlnPQPhdatqAKvsfw1yrYH9k/1MJWd/zmtD+m0xIAcCeGP+N0vs5+7DmsF7JRb4IfBN8H4uLyc8GPgldB/8qH7aeeA5yxde7z0S/SeCmmuOI6QwcWLmHLzc22tNjMBn3YlrEaj8pl+VNOya+cr3zJJ/1fu8uX/019p8J/1/I5z3bW5gMAAAAASUVORK5CYII="
-
-# Decode the Base64 string into binary data
-$iconData = [Convert]::FromBase64String(($Base64 -replace "\s+"))
-
-# Create a streaming image by streaming the base64 string to a bitmap streamsource
-$bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
-$bitmap.BeginInit()
-$bitmap.StreamSource = [System.IO.MemoryStream][System.Convert]::FromBase64String($Base64)
-$bitmap.EndInit()
-$bitmap.Freeze()
-
-# Set custom icon in the window
-$SyncHash.Window.Icon = $bitmap
-
-# Set custom icon in the taskbar
-$SyncHash.Window.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
-$SyncHash.Window.TaskbarItemInfo.Overlay = $bitmap
-$SyncHash.Window.TaskbarItemInfo.Description = $SyncHash.Window.Title
-
-$SyncHash.DriveComboBox = $SyncHash.Window.FindName("DriveComboBox")
-$SyncHash.BrowseButton = $SyncHash.Window.FindName("BrowseButton")
-$SyncHash.RefreshButton = $SyncHash.Window.FindName("RefreshButton")
-$SyncHash.FileHashComboBox = $SyncHash.Window.FindName("FileHashComboBox")
-$SyncHash.FileHashButton = $SyncHash.Window.FindName("FileHashButton")
-$SyncHash.IsoPathText = $SyncHash.Window.FindName("IsoPathText")
-$SyncHash.ButtonBootable = $SyncHash.Window.FindName("ButtonBootable")
-$SyncHash.ButtonInstall = $SyncHash.Window.FindName("ButtonInstall")
-$SyncHash.OSEditionsComboBox = $SyncHash.Window.FindName("OSEditionsComboBox")
-$SyncHash.PartitionEFI = $SyncHash.Window.FindName("PartitionEFI")
-$SyncHash.PartitionMSR = $SyncHash.Window.FindName("PartitionMSR")
-$SyncHash.PartitionReTools = $SyncHash.Window.FindName("PartitionReTools")
-$SyncHash.PartitionRecovery = $SyncHash.Window.FindName("PartitionRecovery")
-$SyncHash.PartitionWindows = $SyncHash.Window.FindName("PartitionWindows")
-$SyncHash.OutputTextBox = $SyncHash.Window.FindName("OutputTextBox")
-$SyncHash.HtmlBootableUSB = $SyncHash.Window.FindName("HtmlBootableUSB")
-$SyncHash.HtmlInstallWindow = $SyncHash.Window.FindName("HtmlInstallWindow")
-
-$SyncHash.TextBoxUpdate = $SyncHash.Window.FindName("TextBoxUpdate")
-
-$SyncHash.FileHashComboBox.SelectedIndex = 2
-
-$SyncHash.PartitionEFI.Text = "256"
-$SyncHash.PartitionMSR.Text = "512"
-$SyncHash.PartitionReTools.Text = "1024"
-$SyncHash.PartitionRecovery.Text = "8192"
-$SyncHash.PartitionWindows.Text = "max"
 
 $HtmlBootableUSB = @"
 <!DOCTYPE html>
@@ -918,8 +749,215 @@ W:\Windows\System32\reagentc /setreimage /path T:\Recovery\WindowsRE /target W:\
 
 </body>
 </html>
-
 "@
+
+# Define the XAML layout for the WPF window
+[xml]$xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Create-BootableUSB | Create bootable USB Drive or install Windows on it." Width="800" Height="600" ResizeMode="NoResize" WindowStartupLocation="CenterScreen" ShowInTaskbar="True">
+
+    <Window.TaskbarItemInfo> 
+        <TaskbarItemInfo/>
+    </Window.TaskbarItemInfo>
+
+    <Grid>
+        <!-- Tab Control -->
+        <TabControl VerticalAlignment="Top" Margin="0,0,0,0">
+            <!-- First Main Tab -->
+            <TabItem Header="General">
+                <StackPanel Margin="5" HorizontalAlignment="Left">
+                    <!-- Drive Selection -->
+                    <TextBlock Text="Select Target Drive" Margin="0,0,0,5"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <ComboBox x:Name="DriveComboBox" Width="660" Height="25"/>
+                        <Button x:Name="RefreshButton" Content="Refresh" Width="75" Height="25" Margin="25,0,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                        <TextBlock Text="Select ISO Image" Margin="0,0,0,0"/>
+                        <TextBlock Text="Hash Algorithm" Margin="50,0,0,0"/>
+                        <TextBlock Margin="80,0,0,0">
+                            <Run Text="Select Edition. Applies to '"/> <Run Text="Install Windows on Drive" FontWeight="Bold"/> <Run Text="' only!"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- ISO Selection -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,5,0,5">
+                        <Button x:Name="BrowseButton" Content="Browse" Width="100" Height="25" Margin="0,0,0,0"/>
+                        <ComboBox x:Name="FileHashComboBox" Width="120" Height="25" Margin="40,0,0,0">
+                            <ComboBoxItem Content="MD5"/>
+                            <ComboBoxItem Content="SHA1"/>
+                            <ComboBoxItem Content="SHA256"/>
+                            <ComboBoxItem Content="SHA384"/>
+                            <ComboBoxItem Content="SHA512"/>
+                        </ComboBox>
+                        <ComboBox x:Name="OSEditionsComboBox" Width="360" Height="25" Margin="40,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Show File Path -->
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="IsoPathText" Text="Path: [EMPTY]" Margin="0,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Start Buttons -->
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="FileHashButton" Content="Get Hash" Width="75" Height="25" Margin="0,0,0,0"/>
+                        <Button x:Name="ButtonBootable" Content="Create Bootable Drive" Width="130" Height="25" Margin="50,0,0,0"/>
+                        <Button x:Name="ButtonInstall" Content="Install Windows on Drive" Width="160" Height="25" Margin="50,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Big Text Box-->
+                    <StackPanel Margin="0, 10, 0, 0" HorizontalAlignment="Left">
+                        <TextBox x:Name="OutputTextBox" Width="765" Height="355" Margin="0,0,0,10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AcceptsReturn="True" IsReadOnly="True"/>
+                    </StackPanel>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Second Main Tab -->
+            <TabItem Header="Options">
+                <StackPanel Margin="10" HorizontalAlignment="Left">
+                    <!-- Five TextBoxes with labels above each box -->
+                    <TextBlock Text="Values in MB for each partition of Windows Preinstallation Environment" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="EFI" HorizontalAlignment="Center" Margin="5,0"/>
+                            <TextBox x:Name="PartitionEFI" Width="60" Height="20" Margin="5,0"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="MSR" HorizontalAlignment="Center" Margin="5,0"/>
+                            <TextBox x:Name="PartitionMSR" Width="60" Height="20" Margin="5,0"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="RE Tools" HorizontalAlignment="Center" Margin="5,0"/>
+                            <TextBox x:Name="PartitionReTools" Width="60" Height="20" Margin="5,0"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="Recovery" HorizontalAlignment="Center" Margin="5,0"/>
+                            <TextBox x:Name="PartitionRecovery" Width="60" Height="20" Margin="5,0"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="Windows" HorizontalAlignment="Center" Margin="5,0"/>
+                            <TextBox x:Name="PartitionWindows" Width="60" Height="20" Margin="5,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Know-How">
+                <Grid>
+                    <TabControl>
+                        <TabItem Header="Bootable USB">
+                            <Grid>
+                                <WebBrowser x:Name="HtmlBootableUSB" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                            </Grid>
+                        </TabItem>
+                        <TabItem Header="Install Windows">
+                            <Grid>
+                                <WebBrowser x:Name="HtmlInstallWindow" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </TabItem>
+
+            <!-- Fourth Main Tab -->
+            <TabItem Header="Support">
+                <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Margin="0,0,0,0">
+                    <!-- Row with TextBlock and Buttons -->
+                    
+                        <TextBlock Margin="5,5,0,0">
+                            <TextBlock.Inlines>
+                                <Run x:Name="ScriptVersion" Text=""/>
+                                <LineBreak/>
+                                <Run x:Name="ScriptDeveloper" Text=""/>
+                                <LineBreak />
+                                <Run Text="Repository: "/>
+                                <Hyperlink x:Name="ScriptRepo" NavigateUri=""> <Run Text=""/> </Hyperlink>
+                            </TextBlock.Inlines>
+                        </TextBlock>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                        <Button x:Name="ButtonCheckUpdate" Content="Check For Update" Width="130" Height="25" Margin="50,0,10,0"/>
+                        <Button x:Name="ButtonUpdate" Content="Update" Width="130" Height="25" Margin="50,0,0,0"/>
+                    </StackPanel>
+
+                    <TextBox x:Name="TextBoxUpdate" Width="770" Height="410" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" HorizontalAlignment="Left" Margin="5,20,0,10"/>
+                </StackPanel>
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</Window>
+"@
+
+# Set custom icon using base64-encoded data
+$IconBase64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAACXEAAAlxAYZ2/isAAAAZdEVYdFNvZnR3YXJlAHd3dy5pbmtzY2FwZS5vcmeb7jwaAAABh2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFj
+a2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4NCjx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iPjxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+PHJkZjpEZXNjcmlwdGl
+vbiByZGY6YWJvdXQ9InV1aWQ6ZmFmNWJkZDUtYmEzZC0xMWRhLWFkMzEtZDMzZDc1MTgyZjFiIiB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+PHRpZmY6T3JpZW50YXRpb24+MTwvdGlmZjpPcmllbnRhdGlvbj48L3JkZjpEZXNjcmlwdGlvbj48L3JkZjpSRE
+Y+PC94OnhtcG1ldGE+DQo8P3hwYWNrZXQgZW5kPSd3Jz8+LJSYCwAABNtJREFUWEedlluIVlUUx39r7++cbxwdR9TEaxfNGKjIQDFDfEpKDF+iAnsQgh6NHooIH8IevFDRQyoh+KJUUPYQmRBdyS4PQUQEmvoQBV6SUcdxZr7L2Wv1sM83frPnm3G+/rDhcPa6/Nd/rb3PgS4QDskePepO6xG/J
+d37v3Dpi+lgKudFZEDgpL7n37d3mJfadIuuCDjTT8Mg1xgDydiuuTulB7g3tesG3RHYyaCYfY+HcB2clwfAf6Pvcl9qO1N0RQAAld8wQCHcABFZYYU/cf1t5qemM0HXBAS5jgqogAk6DC6X1X2hcii1nQm6JxBsMQGkXCjYDXA5z+qbfmtqfzt0TUCbsp5mqUC5LAgUAk3Zb99SSX2mQ1cEbG91
+JcgGxmLl7ctGQapyv/2cPQ2ge/Inw57K8TRGiq4IaENfchlVLYAwcVkAGmBNXiS2aqOb757S3ZWX0zjtkPRFC7qfPkazV5nT3OteYUTfyB4E+YVA1TS1jnASubgsPGZNd9DlMmBKvRFY07O7cSa1Z1oFbvq1Mt/tYijbCmCFHBOhakUpewBaz+XSAE4Rq/uPnMmAjoJ4qlmwt9LwLUxJIAT/HHU
+wlW1hV37MVXhIR8pkTaBq2IIQSZSnAY2tcLDACsDAboLzstV2VTamOZiqBfo6i6yen3MiczGgAtpoMzCwpQXMVuRyBYbcNKWA6wWt8bHfV39m0l76AkBq+fMud3O1GSuyWpvUDaBfYZZBIdi8WHK7CpPWGFDwhL7GHWmuSQR0J1UteIG6jUtq7clna5Q+RCXIwPpDbEtrNhIy1gSX00czfzTNN4
+kAWXWT824ldUFCuVSQhsAsw5aEmLgFBeYqUuGWLYIU5XMQCALmQGVtmyd0JBB4HJF4rtsr7zFsRQG+rLyFlgqzDWqC9Sq6qgEVu6WKjp+YVW2e0JmArJnkmBt6V5lcU4cSszTKPT9EsovKNrXiBKApt58BVBZGAi3pBF1RQB5noiMMrGrY8gL6DOqC9Sv0GuPfjUIgSE/q2oEAMs64IXHg+jQqM
+RW0bFGragBnkUQRr0cMLJ6HCZhMoOBG/MqVQRaEqEQnWDIP7QqZYHMUpFQuFnW1zQI6EjDOIhKly+KNNyFJC63+piRaUCCzODdFbKUYZ1OzyQQK+Y7yZ8O8RYs0QQCqwCbgkWlIuHjXSojXdzB3qpPJRKg/qWM2hJS9S2HlBb4eWAbcCSwqT0snBMAJWre//dDID+n2JALu2PCgqBwmE2TMxcDt
+I9AAVgFLyyvWgOUdFBBiG2sOvCDKQXd8JkMIUPX7rMYFaTgYduDL6FZKf09bxQWwGOhNhtAbMuSQIFjNzklv/4G23XF0JOCO3Lgq2A4KwV+q3LIKQB8wp3ymTDoHWNFGSiJZdynDAk0s7JDDF0fL3QnoSABAPhj5ypQdXMzwV7J4GiBOdeoVgLuBvFQpN/zFHLviA8p292Ht58RjHGmoCXDHh4/
+aGNvs9/yiH6ngZxuMlnPQPhdatqAKvsfw1yrYH9k/1MJWd/zmtD+m0xIAcCeGP+N0vs5+7DmsF7JRb4IfBN8H4uLyc8GPgldB/8qH7aeeA5yxde7z0S/SeCmmuOI6QwcWLmHLzc22tNjMBn3YlrEaj8pl+VNOya+cr3zJJ/1fu8uX/019p8J/1/I5z3bW5gMAAAAASUVORK5CYII="
+
+# Create a streaming image by streaming the base64 string to a bitmap streamsource
+$bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+$bitmap.BeginInit()
+$bitmap.StreamSource = [System.IO.MemoryStream][System.Convert]::FromBase64String(($IconBase64 -replace "\s+"))
+$bitmap.EndInit()
+$bitmap.Freeze()
+
+# Create synchronized hashtable to share data between different threads or runspaces
+$SyncHash = [Hashtable]::Synchronized(@{})
+
+# Load the XAML and bind controls
+$XmlReader = New-Object System.Xml.XmlNodeReader $xaml
+
+# Retrieve WPF elements
+$SyncHash.Window = [System.Windows.Markup.XamlReader]::Load($XmlReader)
+
+# Set custom icon in the window
+$SyncHash.Window.Icon = $bitmap
+
+# Set custom icon in the taskbar
+$SyncHash.Window.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
+$SyncHash.Window.TaskbarItemInfo.Overlay = $bitmap
+$SyncHash.Window.TaskbarItemInfo.Description = $SyncHash.Window.Title
+
+$SyncHash.DriveComboBox = $SyncHash.Window.FindName("DriveComboBox")
+$SyncHash.RefreshButton = $SyncHash.Window.FindName("RefreshButton")
+$SyncHash.BrowseButton = $SyncHash.Window.FindName("BrowseButton")
+$SyncHash.FileHashComboBox = $SyncHash.Window.FindName("FileHashComboBox")
+$SyncHash.FileHashButton = $SyncHash.Window.FindName("FileHashButton")
+$SyncHash.IsoPathText = $SyncHash.Window.FindName("IsoPathText")
+$SyncHash.ButtonBootable = $SyncHash.Window.FindName("ButtonBootable")
+$SyncHash.ButtonInstall = $SyncHash.Window.FindName("ButtonInstall")
+$SyncHash.OSEditionsComboBox = $SyncHash.Window.FindName("OSEditionsComboBox")
+$SyncHash.PartitionEFI = $SyncHash.Window.FindName("PartitionEFI")
+$SyncHash.PartitionMSR = $SyncHash.Window.FindName("PartitionMSR")
+$SyncHash.PartitionReTools = $SyncHash.Window.FindName("PartitionReTools")
+$SyncHash.PartitionRecovery = $SyncHash.Window.FindName("PartitionRecovery")
+$SyncHash.PartitionWindows = $SyncHash.Window.FindName("PartitionWindows")
+$SyncHash.OutputTextBox = $SyncHash.Window.FindName("OutputTextBox")
+$SyncHash.HtmlBootableUSB = $SyncHash.Window.FindName("HtmlBootableUSB")
+$SyncHash.HtmlInstallWindow = $SyncHash.Window.FindName("HtmlInstallWindow")
+$SyncHash.ScriptVersion = $SyncHash.Window.FindName("ScriptVersion")
+$SyncHash.ScriptDeveloper = $SyncHash.Window.FindName("ScriptDeveloper")
+$SyncHash.ScriptRepo = $SyncHash.Window.FindName("ScriptRepo")
+$SyncHash.ButtonCheckUpdate = $SyncHash.Window.FindName("ButtonCheckUpdate")
+$SyncHash.ButtonUpdate = $SyncHash.Window.FindName("ButtonUpdate")
+$SyncHash.TextBoxUpdate = $SyncHash.Window.FindName("TextBoxUpdate")
+
+$SyncHash.FileHashComboBox.SelectedIndex = 2
+$SyncHash.PartitionEFI.Text = "256"
+$SyncHash.PartitionMSR.Text = "512"
+$SyncHash.PartitionReTools.Text = "1024"
+$SyncHash.PartitionRecovery.Text = "8192"
+$SyncHash.PartitionWindows.Text = "max"
 
 $SyncHash.HtmlBootableUSB.NavigateToString($HtmlBootableUSB)
 $SyncHash.HtmlInstallWindow.NavigateToString($HtmlInstallWindow)
@@ -937,12 +975,21 @@ $SyncHash.IsoDrive = $null
 $SyncHash.ScriptInfo = @{
     LocalPath = $MyInvocation.MyCommand.Path
     Name = "Create-BootableUSB"
-    Version= "1.00"
-    UrlJson = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json"
-    UrlContent = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1"
-    UrlRepository = "https://github.com/ourshell/Create-BootableUSB"
+    Version= "1.02"
+    Website = "https://github.com/ourshell/"
+    Json = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json"
+    Content = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1"
+    Repository = "https://github.com/ourshell/Create-BootableUSB"
     Developer = "Boris Andonov"
 }
+
+$SyncHash.ScriptVersion.Text = "Version: " + $SyncHash.ScriptInfo.Version
+$SyncHash.ScriptDeveloper.Text = "Developer: " + $SyncHash.ScriptInfo.Developer
+
+# Dynamically set the Hyperlink properties using the synced hashtable
+$SyncHash.ScriptRepo.NavigateUri = [Uri]$SyncHash.ScriptInfo.Repository
+$SyncHash.ScriptRepo.Inlines.Clear()
+$SyncHash.ScriptRepo.Inlines.Add([Windows.Documents.Run]::new($SyncHash.ScriptInfo.Repository))
 
 $SyncHash.UpdateObjects = {
     # Enable GUI objects
@@ -1191,49 +1238,19 @@ $SyncHash.PartitionWindows.Add_LostFocus({
     }
 })
 
-$SyncHash.Window.FindName("WebsiteLink").Add_Click({
-    Start-Process "https://github.com/ourshell/"
+$SyncHash.ScriptRepo.Add_Click({
+    Start-Process $SyncHash.ScriptInfo.Repository
 })
 
-$SyncHash.Window.FindName("ButtonCheckUpdate").Add_Click({
-    $Error.Clear()
-    $SyncHash.UpdateLog.Invoke("Checking for update, please wait . . .")
-
-    $Json = Invoke-WebRequest -Uri $SyncHash.ScriptInfo.UrlJson -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json
-    $SyncHash.UpdateLog.Invoke("Current Version:$($SyncHash.ScriptInfo.Version)`r`nOnline Version: $($Json.Version) ", $Error)
+$SyncHash.ButtonCheckUpdate.Add_Click({
+    & $SyncHash.DisableObjects
+    $Background.Invoke("ButtonCheckUpdate")
 })
 
-$SyncHash.Window.FindName("ButtonUpdate").Add_Click({
-    $Error.Clear()
-    $SyncHash.UpdateLog.Invoke("Updating the script, please wait . . .")
-
-    $Json = Invoke-WebRequest -Uri $SyncHash.ScriptInfo.UrlJson -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json
-
-    $SyncHash.UpdateLog.Invoke("Current Version:$($SyncHash.ScriptInfo.Version)`r`nOnline Version: $($Json.Version) ", $Error)
-
-    if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
-        $Content = Invoke-RestMethod -Uri $Json.UrlContent -ErrorAction SilentlyContinue
-
-        if ($Error -or -not $SyncHash.ScriptInfo.LocalPath) {
-            $SyncHash.UpdateLog.Invoke("Missing script's local path or repo is not available.", $Error)
-        }
-        else {
-            $Error.Clear()
-            #Set-Content -Path $SyncHash.ScriptInfo.LocalPath -Value $Content -Force -ErrorAction SilentlyContinue
-
-            if ($Error) {
-                $SyncHash.UpdateLog.Invoke("Unable to update the script due to an internal failure", $Error)
-            }
-            else {
-                $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.", $Error)
-            }
-        }
-    }
-    else {
-        $SyncHash.UpdateLog.Invoke("There is no new version.", $Error)
-    }
+$SyncHash.ButtonUpdate.Add_Click({
+    & $SyncHash.DisableObjects
+    $Background.Invoke("ButtonUpdate")
 })
-
 
 if ($host.Name -eq "ConsoleHost") {
     Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();' -Name Win32 -Namespace Native
