@@ -25,276 +25,234 @@ else {
 $ScriptUpdate = {
     param ([string]$Action)
 
-    $SyncHash.UpdateLog.Invoke("Checking for new version, please wait . . .", $Error)
+    $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $output = "================ Begin: $TimeStamp ================`r`n`r`n"
+    $output += "Checking for new version, please wait . . ."
+    $SyncHash.UpdateLog.Invoke(@($output, $Error))
 
-    $Json = Invoke-RestMethod -Uri $SyncHash.ScriptInfo.Json -UseBasicParsing -Method Get
-    $SyncHash.UpdateLog.Invoke("Local Version:$($SyncHash.ScriptInfo.Version)`r`nLatest Version: $($Json.Version) ", $Error)
+    try {
+        $Json = Invoke-RestMethod -Uri $SyncHash.ScriptInfo.Json -UseBasicParsing -Method Get -ErrorAction Stop
+        $SyncHash.UpdateLog.Invoke("Local Version: $($SyncHash.ScriptInfo.Version)`r`nLatest Version: $($Json.Version)")
 
-    if ($Action -eq "ButtonUpdate") {
-        if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
-            <# Notes for future and faster approach
+        if ($Action -eq "ButtonUpdate") {
+            if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
+                $Content = (Invoke-WebRequest -Uri $Json.Content -UseBasicParsing -ErrorAction Stop).Content
 
-            $WebClient = New-Object System.Net.WebClient
-            $RawContent = $WebClient.DownloadString($Json.Content)
-            $WebClient.Dispose()
-
-            $HttpClient = [System.Net.Http.HttpClient]::new()
-            $RawContent = $HttpClient.GetStringAsync($Json.Content).Result
-            $HttpClient.Dispose()
-            #>
-
-            $Content = (Invoke-WebRequest -Uri $Json.Content -UseBasicParsing -ErrorAction SilentlyContinue).Content
-
-            if ($Error -or -not $SyncHash.ScriptInfo.LocalPath -or -not $Content) {
-                $SyncHash.UpdateLog.Invoke("Missing script's local path or repo is not available.", $Error)
-            }
-            else {
-                #Set-Content -Path $SyncHash.ScriptInfo.LocalPath -Value $Content -Force -ErrorAction SilentlyContinue
-
-                if ($Error) {
-                    $SyncHash.UpdateLog.Invoke("Unable to update the script due to an internal error", $Error)
+                if ($Content -and $SyncHash.ScriptInfo.LocalPath) {
+                    try {
+                        Set-Content -Path $SyncHash.ScriptInfo.LocalPath -Value $Content -Force -ErrorAction Stop
+                        $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.")
+                    } catch {
+                        $SyncHash.UpdateLog.Invoke("Unable to update the script due to an internal error.", $_)
+                    }
+                } else {
+                    $SyncHash.UpdateLog.Invoke("Missing script's local path or repo is not available.")
                 }
-                else {
-                    $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.", $Error)
-                }
+            } else {
+                $SyncHash.UpdateLog.Invoke("There is no new version.")
             }
+        } else {
+            $SyncHash.UpdateLog.Invoke("If there is a new version, you can proceed with the update.")
         }
-        else {
-            $SyncHash.UpdateLog.Invoke("There is no new version.", $Error)
-        }
-    }
-    else {
-        $SyncHash.UpdateLog.Invoke("If there is a new version you can proceed with update.", $Error)
+    } catch {
+        $SyncHash.UpdateLog.Invoke("An error occurred while checking for updates.", $_)
+    } finally {
+        $SyncHash.UpdateLog.Invoke("Finished!")
+
+        # Enable GUI objects after completion
+        $SyncHash.Window.Dispatcher.Invoke([action] {
+            & $SyncHash.EnableValidObjects
+            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            $SyncHash.TextBoxUpdate.AppendText("================ End: $TimeStamp ================`r`n`r`n")
+            $SyncHash.TextBoxUpdate.ScrollToEnd()
+        })
     }
 }
 
 # Logic to verify the image
 $GetImageHealth = {
-    $output = "================ Begin: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n"
-    $output += "Operation: Get Image Health Hash" + "`r`n"
-    $output += "Selected File: $($SyncHash.IsoPath)"
+    $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $output = "================ Begin: $TimeStamp ================`r`n`r`n"
+    $output += "Operation: Get Image Health`r`n"
+    $output += "Selected File: $($SyncHash.IsoPath)`r`n"
+    $output += "The selected image is being verified, please wait . . ."
 
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
+    $SyncHash.WriteOutput.Invoke(@($output, $Error))
 
-    $Image = Get-DiskImage -ImagePath $SyncHash.IsoPath -ErrorVariable ImageError -ErrorAction SilentlyContinue
+    try {
+        $Image = Get-DiskImage -ImagePath $SyncHash.IsoPath -ErrorAction Stop
 
-    if ($ImageError) {
-        $output = "Corrupted Image: " + $SyncHash.IsoPath
-        $SyncHash.WriteOutput.Invoke($output, $Error)
-        $Error.Clear()
-    }
-    else {
-        if ($Image.Attached) {
-            $SyncHash.IsoDrive = $Image | Get-Volume | Select-Object -ExpandProperty DriveLetter
-        }
-        else {
-            $Image = Mount-DiskImage $SyncHash.IsoPath
-            $SyncHash.IsoDrive = $Image | Get-Volume | Select-Object -ExpandProperty DriveLetter
+        if (-not $Image.Attached) {
+            Mount-DiskImage -ImagePath $SyncHash.IsoPath -ErrorAction Stop
         }
 
-        if (Test-Path -Path "$($SyncHash.IsoDrive)`:\sources\install.wim") {
-            $SyncHash.OSEditions = Get-WindowsImage -ImagePath "$($SyncHash.IsoDrive)`:\sources\install.wim"
+        $SyncHash.IsoDrive = ($Image | Get-Volume -ErrorAction Stop).DriveLetter
+
+        if (Test-Path -Path "$($SyncHash.IsoDrive)`:\sources\install.wim" -ErrorAction SilentlyContinue) {
+            $SyncHash.OSEditions = Get-WindowsImage -ImagePath "$($SyncHash.IsoDrive)`:\sources\install.wim" -ErrorAction SilentlyContinue
         }
 
         if ($SyncHash.OSEditions) {
             $SyncHash.Window.Dispatcher.Invoke([action] {
                 foreach ($edition in $SyncHash.OSEditions) {
-                    # Create a new ComboBoxItem
                     $ComboBoxItem = New-Object System.Windows.Controls.ComboBoxItem
                     $ComboBoxItem.Content = $edition.ImageName
-        
-                    # Add a tooltip to the ComboBoxItem
                     $ComboBoxItem.ToolTip = $edition.ImageDescription
-
-                    # Add the ComboBoxItem to the ComboBox
                     $SyncHash.OSEditionsComboBox.Items.Add($ComboBoxItem) | Out-Null
                 }
             })
+        } else {
+            $SyncHash.WriteOutput.Invoke("No Windows Editions found!`r`nIf it's Linux, VMware or other bootable ISO, you can still burn it on a USB drive.")
         }
-        else {
-            $SyncHash.WriteOutput.Invoke("No Windows Editions found!`r`nIf it's Linux, VMware or other bootable ISO you can still burn it on a USB drive.", $Error)
-            $Error.Clear()
-        }
+    } catch {
+        $SyncHash.WriteOutput.Invoke("Error occurred:", $_)
+    } finally {
+        $SyncHash.WriteOutput.Invoke("Finished!")
+
+        # Enable GUI objects after completion
+        $SyncHash.Window.Dispatcher.Invoke([action] {
+            if ($SyncHash.OSEditionsComboBox.Items) {
+                $SyncHash.OSEditionsComboBox.SelectedIndex = 0
+            }
+
+            & $SyncHash.EnableValidObjects
+            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            $SyncHash.OutputTextBox.AppendText("================ End: $TimeStamp ================`r`n`r`n")
+            $SyncHash.OutputTextBox.ScrollToEnd()
+        })
     }
-
-    $SyncHash.WriteOutput.Invoke("Finished!", $Error)
-    $Error.Clear()
-
-    # Enable GUI objects after completion
-    $SyncHash.Window.Dispatcher.Invoke([action] {
-        if ($SyncHash.OSEditionsComboBox.Items) {
-            $SyncHash.OSEditionsComboBox.SelectedIndex = 0
-        }
-
-        & $SyncHash.UpdateObjects
-        $SyncHash.OutputTextBox.AppendText("================ End: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n")
-        $SyncHash.OutputTextBox.ScrollToEnd()
-    })
 }
 
 # Logic to get File Hash
 $GetFileHash = {
     param ([string]$algorithm)
 
-    $output = "================ Begin: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n"
-    $output += "Operation: Get File Hash" + "`r`n"
-    $output += "Selected File: $($SyncHash.IsoPath)" + "`r`n" + "Calculating Hash: $algorithm"
+    $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $output = "================ Begin: $TimeStamp ================`r`n`r`n"
+    $output += "Operation: Get File Hash`r`n"
+    $output += "Selected File: $($SyncHash.IsoPath)`r`n"
+    $output += "Calculating Hash $algorithm, please wait . . ."
+
     $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
 
-    $hash = Get-FileHash -Path $SyncHash.IsoPath -Algorithm $algorithm
+    try {
+        $hash = Get-FileHash -Path $SyncHash.IsoPath -Algorithm $algorithm -ErrorAction Stop
+        $SyncHash.WriteOutput.Invoke($hash.Hash)
+    } catch {
+        $SyncHash.WriteOutput.Invoke("Error occurred during hash calculation.", $_)
+    } finally {
+        $SyncHash.WriteOutput.Invoke("Finished!")
 
-    $SyncHash.WriteOutput.Invoke($hash.Hash, $Error)
-    $Error.Clear()
-
-    # Enable GUI objects after completion
-    $SyncHash.Window.Dispatcher.Invoke([action] {
-        & $SyncHash.UpdateObjects
-        $SyncHash.OutputTextBox.AppendText("================ End: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n")
-        $SyncHash.OutputTextBox.ScrollToEnd()
-    })
+        # Enable GUI objects after completion
+        $SyncHash.Window.Dispatcher.Invoke([action] {
+            & $SyncHash.EnableValidObjects
+            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            $SyncHash.OutputTextBox.AppendText("================ End: $TimeStamp ================`r`n`r`n")
+            $SyncHash.OutputTextBox.ScrollToEnd()
+        })
+    }
 }
 
 # Logic for Bootable USB
 $CreateBootableDrive = {
-    $output = "================ Begin: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n"
-    $output += "Operation: Create Bootable (USB) Drive" + "`r`n"
-    $output += "Selected Disk: $($SyncHash.SelectedDrive.Caption)`n"
-    $output += "Selected Image: $($SyncHash.IsoPath)`n"
-    $output += "Repartitioning the drive . . . "
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $output = "================ Begin: $timestamp ================`r`n`r`n"
+    $output += "Operation: Create Bootable (USB) Drive`r`n"
+    $output += "Selected Disk: $($SyncHash.SelectedDrive.Caption)`r`n"
+    $output += "Selected Image: $($SyncHash.IsoPath)`r`n"
+    $output += "Repartitioning the drive . . ."
 
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
+    $SyncHash.WriteOutput.Invoke(@($output, $Error))
 
-    if ($SyncHash.SelectedDrive.Size -le (32 * 1GB)) {
-        $DrivePartition2 = $false
+    try {
+        if ($SyncHash.SelectedDrive.Size -le (32 * 1GB)) {
+            $DrivePartition2 = $false
 
-        $diskpart = (@"
-select disk $($SyncHash.SelectedDrive.Index)
-clean
-create partition primary
-select partition 1
-active
-format fs=fat32 quick
-exit
-"@ | diskpart.exe 2>&1)
-    }
-    else {
-        $DrivePartition2 = $true
+            $DiskPartScript = "select disk $($SyncHash.SelectedDrive.Index)" + "`r`n"
+            $DiskPartScript += "clean" + "`r`n"
+            $DiskPartScript += "create partition primary" + "`r`n"
+            $DiskPartScript += "select partition 1" + "`r`n"
+            $DiskPartScript += "active" + "`r`n"
+            $DiskPartScript += "format fs=fat32 quick" + "`r`n"
+            $DiskPartScript += "assign" + "`r`n"
+            $DiskPartScript += "exit" + "`r`n"
+        } else {
+            $DrivePartition2 = $true
+            $PartitionSize = [math]::Min([System.Math]::Floor($SyncHash.SelectedDrive.Size / 2MB), 32 * 1024)
 
-        $PartitionSize = $SyncHash.SelectedDrive.Size / 2
-        if ($PartitionSize -le (32 * 1GB)) {
-            $PartitionSize = [System.Math]::Floor($PartitionSize / 1MB)
+            $DiskPartScript = "select disk $($SyncHash.SelectedDrive.Index)" + "`r`n"
+            $DiskPartScript += "clean" + "`r`n"
+            $DiskPartScript += "create partition primary size=$PartitionSize" + "`r`n"
+            $DiskPartScript += "select partition 1" + "`r`n"
+            $DiskPartScript += "active" + "`r`n"
+            $DiskPartScript += "format fs=fat32 quick label=`"BOOT-FAT32`"" + "`r`n"
+            $DiskPartScript += "assign" + "`r`n"
+            $DiskPartScript += "create partition primary" + "`r`n"
+            $DiskPartScript += "select partition 2" + "`r`n"
+            $DiskPartScript += "format fs=ntfs quick label=`"DATA-NTFS`"" + "`r`n"
+            $DiskPartScript += "assign" + "`r`n"
+            $DiskPartScript += "exit" + "`r`n"
         }
-        else {
-            $PartitionSize = 32 * 1024 # 32GB expressed in MB
+
+        # $DiskPartOutput = diskpart.exe /s ([System.IO.Path]::GetTempFileName() | Set-Content -Value $DiskPartScript -PassThru) 2>&1
+        $DiskPartOutput = $DiskPartScript | diskpart 2>&1 | Out-String
+
+        $SyncHash.WriteOutput.Invoke($DiskPartOutput)
+        $SyncHash.WriteOutput.Invoke("Burning ISO Image . . .")
+
+        Start-Sleep -Seconds 2
+
+        $FlashDrive = Get-Partition -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 1 -ErrorAction Stop | Select-Object -ExpandProperty DriveLetter
+
+        if (Test-Path -Path "$($SyncHash.IsoDrive)`:\boot\bootsect.exe") {
+            $output = "Updating the boot code from $FlashDrive`: to $($SyncHash.IsoDrive)`:"
+            $SyncHash.WriteOutput.Invoke($output)
+
+            $BootSectOutput = cmd /c "$($SyncHash.IsoDrive)`:\boot\bootsect.exe /nt60 $FlashDrive`:" 2>&1 | Out-String
+            $SyncHash.WriteOutput.Invoke($BootSectOutput)
         }
 
-        $diskpart = (@"
-select disk $($SyncHash.SelectedDrive.Index)
-clean
+        $source = "$($SyncHash.IsoDrive)`:\"
+        $destination = "$FlashDrive`:\"
+        $MaxSize = 4294967296  # 4 GB in bytes
 
-create partition primary size=$PartitionSize
-select partition 1
-active
-format fs=fat32 quick label="BOOT-FAT32"
+        $SyncHash.WriteOutput.Invoke("Copying files from $source to $destination")
+        $output = ""
 
-create partition primary
-select partition 2
-format fs=ntfs quick label="DATA-NTFS"
+        Get-ChildItem -Path $source -Recurse -ErrorAction Stop | ForEach-Object {
+            $DestPath = Join-Path -Path $destination -ChildPath ($_.FullName -replace [regex]::Escape($source), "") -ErrorAction Stop
 
-exit
-"@ | diskpart.exe 2>&1)
-
-    }
-    $output = "Done!" + "`r`n`r`n" + ($diskpart | Out-String).Trim() + "`r`n`r`n" + "Burning ISO Image . . ."
-
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    Start-Sleep -Seconds 2
-
-    $FlashDrive = Get-Partition -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 1 | Select-Object -ExpandProperty DriveLetter
-
-    if (-not $FlashDrive) {
-        Add-PartitionAccessPath -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 1 -AssignDriveLetter
-        $FlashDrive = Get-Partition -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 1 | Select-Object -ExpandProperty DriveLetter
-    }
-
-    if ($DrivePartition2) {
-        $FlashDrive2 = Get-Partition -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 2 | Select-Object -ExpandProperty DriveLetter
-
-        if (-not $FlashDrive2) {
-            Add-PartitionAccessPath -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 2 -AssignDriveLetter
+            if ($_.PSIsContainer) {
+                New-Item -ItemType Directory -Path $DestPath -Force -ErrorAction Stop | Out-Null
+            } elseif ($_.Length -le $MaxSize) {
+                Copy-Item -Path $_.FullName -Destination $DestPath -Force -ErrorAction Stop | Out-Null
+            } else {
+                $output += "Skip file '$($_.FullName)' with size $($_.Length) bytes. The size is over 4GB for FAT32`r`n"
+            }
         }
-    }
 
-    if (Test-Path -Path "$($SyncHash.IsoDrive)`:\boot\bootsect.exe") {
-        $output = "Updating the boot code from $FlashDrive`: to $($SyncHash.IsoDrive)`:"
-        $SyncHash.WriteOutput.Invoke($output, $Error)
-        $Error.Clear()
+        $SyncHash.WriteOutput.Invoke($output)
 
-        $output = ((cmd /c "$($SyncHash.IsoDrive)`:\boot\bootsect.exe /nt60 $FlashDrive`: 2>&1") | Out-String).Trim()
+        if ((Test-Path -Path "$($source)sources\install.wim") -and ((Get-Item -Path "$($source)sources\install.wim").Length -gt 4GB)) {
+            $output = "DISM: Split file '$($source)sources\install.wim' to '$($destination)sources\install.swm'"
+            $SyncHash.WriteOutput.Invoke($output)
 
-        $SyncHash.WriteOutput.Invoke($output, $Error)
-        $Error.Clear()
-    }
+            $DismOutput = cmd /c "dism /Split-Image /ImageFile:$($source)sources\install.wim /SWMFile:$($destination)sources\install.swm /FileSize:4096" 2>&1 | Out-String
 
-    $source = "$($SyncHash.IsoDrive)`:\"
-    $destination = "$FlashDrive`:\"
-    $MaxSize = 4294967296  # 4 GB in bytes
-
-    $output = "Copying files from $source to $destination"
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    $output = ""
-
-    # Use Get-ChildItem to list files and directories, including subdirectories
-    Get-ChildItem -Path $source -Recurse | ForEach-Object {
-        # Construct the destination path
-        $DestPath = Join-Path -Path $destination -ChildPath ($_.FullName -replace [regex]::Escape($source), "")
-
-        if ($_.PSIsContainer) {
-            # Write-Host "Create directory '$($_.FullName)'"
-            New-Item -ItemType Directory -Path $DestPath | Out-Null
+            $SyncHash.WriteOutput.Invoke($DismOutput)
         }
-        elseif ($_.Length -le $MaxSize) {
-            # Write-Host "Copy file '$($_.FullName)' with size $($_.Length) bytes"
-            Copy-Item -Path $_.FullName -Destination $DestPath | Out-Null
-        }
-        else {
-            $output += "Skip file '$($_.FullName)' with size $($_.Length) bytes. The size is over 4GB for FAT32`r`n"
-        }
+    } catch {
+        $SyncHash.WriteOutput.Invoke("Error during operation:", $_)
+    } finally {
+        $SyncHash.WriteOutput.Invoke("Finished!")
+
+        $SyncHash.Window.Dispatcher.Invoke([action] {
+            & $SyncHash.EnableValidObjects
+            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            $SyncHash.OutputTextBox.AppendText("================ End: $TimeStamp ================`r`n`r`n")
+            $SyncHash.OutputTextBox.ScrollToEnd()
+        })
     }
-
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    if ((Test-Path -Path "$($source)sources\install.wim") -and ((Get-Item -Path "$($source)sources\install.wim").Length -gt 4GB)) {
-        $output = "DISM: Split file '$($source)sources\install.wim' to '$($destination)sources\install.swm'"
-        $SyncHash.WriteOutput.Invoke($output, $Error)
-        $Error.Clear()
-
-        $dism = cmd /c "dism /Split-Image /ImageFile:$($source)sources\install.wim /SWMFile:$($destination)sources\install.swm /FileSize:4096 2>&1"
-        $output = ($dism | Out-String).Trim()
-        $SyncHash.WriteOutput.Invoke($output, $Error)
-        $Error.Clear()
-    }
-
-    $SyncHash.WriteOutput.Invoke("Finished!", $Error)
-    $Error.Clear()
-
-    # Enable GUI objects after completion
-    $SyncHash.Window.Dispatcher.Invoke([action] {
-        & $SyncHash.UpdateObjects
-        $SyncHash.OutputTextBox.AppendText("================ End: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n")
-        $SyncHash.OutputTextBox.ScrollToEnd()
-    })
-
-    #$DriveEject = New-Object -comObject Shell.Application
-    #$DriveEject.Namespace(17).ParseName($destination).InvokeVerb("Eject")
 }
 
 # Logic for Windows Preinstallation Environment.
@@ -459,7 +417,7 @@ exit
 
     # Enable GUI objects after completion
     $SyncHash.Window.Dispatcher.Invoke([action] {
-        & $SyncHash.UpdateObjects
+        & $SyncHash.EnableValidObjects
         $SyncHash.OutputTextBox.AppendText("================ End: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n")
         $SyncHash.OutputTextBox.ScrollToEnd()
     })
@@ -589,7 +547,7 @@ exit
     </ul>
     <pre>robocopy D:\ E:\ /e /max:4294967296</pre>
     <ul>
-        <li>Split large <code>.wim</code> files if needed:</li>
+        <li>Split the large <code>.wim</code> file:</li>
     </ul>
     <pre>Dism /Split-Image /ImageFile:D:\sources\install.wim /SWMFile:E:\sources\install.swm /FileSize:4096</pre>
 
@@ -618,6 +576,9 @@ assign
 
 exit
     </pre>
+    <ul>
+        <li>Then follow same instructions described in <strong>Step 2</strong>.</li>
+    </ul>
 </body>
 </html>
 "@
@@ -657,7 +618,11 @@ $HtmlInstallWindow = @"
     <h3>Prerequisites:</h3>
     <ul>
         <li>USB drive with at least 32 GB size. HDD or SSD is highly recommended.</li>
-        <li>Windows ISO file. You can optain public versions here: <a href="https://www.microsoft.com/en-us/software-download/windows10">Microsoft Windows 10</a> and <a href="https://www.microsoft.com/en-us/software-download/windows11">Microsoft Windows 11</a></li>
+        <li>A Windows ISO file. You can download official versions here:</li>
+        <ul>
+            <li><a href="https://www.microsoft.com/en-us/software-download/windows10" target="_blank">Microsoft Windows 10</a></li>
+            <li><a href="https://www.microsoft.com/en-us/software-download/windows11" target="_blank">Microsoft Windows 11</a></li>
+        </ul>
         <li>A computer running Windows with Administrative privileges.</li>
     </ul>
 
@@ -797,7 +762,7 @@ W:\Windows\System32\reagentc /setreimage /path T:\Recovery\WindowsRE /target W:\
 
                     <!-- Show File Path -->
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock x:Name="IsoPathText" Text="Path: [EMPTY]" Margin="0,0,0,0"/>
+                        <TextBlock x:Name="IsoPathText" Text="Selected: [None]" Margin="0,0,0,0"/>
                     </StackPanel>
 
                     <!-- Start Buttons -->
@@ -964,10 +929,8 @@ $SyncHash.HtmlInstallWindow.NavigateToString($HtmlInstallWindow)
 
 # Initialize variables and pbjects to share between threads
 $SyncHash.Drives = $null
-
 $SyncHash.OSEditions = $null
 $SyncHash.SelectedOSEdition = $null
-
 $SyncHash.SelectedDrive = $null
 $SyncHash.IsoPath = $null
 $SyncHash.IsoDrive = $null
@@ -975,7 +938,7 @@ $SyncHash.IsoDrive = $null
 $SyncHash.ScriptInfo = @{
     LocalPath = $MyInvocation.MyCommand.Path
     Name = "Create-BootableUSB"
-    Version= "1.02"
+    Version= "1.03"
     Website = "https://github.com/ourshell/"
     Json = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json"
     Content = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1"
@@ -991,7 +954,26 @@ $SyncHash.ScriptRepo.NavigateUri = [Uri]$SyncHash.ScriptInfo.Repository
 $SyncHash.ScriptRepo.Inlines.Clear()
 $SyncHash.ScriptRepo.Inlines.Add([Windows.Documents.Run]::new($SyncHash.ScriptInfo.Repository))
 
-$SyncHash.UpdateObjects = {
+$SyncHash.DisableObjects = {
+    # Disable GUI objects
+    $SyncHash.DriveComboBox.IsEnabled = $false
+    $SyncHash.RefreshButton.IsEnabled = $false
+    $SyncHash.BrowseButton.IsEnabled = $false
+    $SyncHash.FileHashComboBox.IsEnabled = $false
+    $SyncHash.FileHashButton.IsEnabled = $false
+    $SyncHash.OSEditionsComboBox.IsEnabled = $false
+    $SyncHash.ButtonBootable.IsEnabled = $false
+    $SyncHash.ButtonInstall.IsEnabled = $false
+    $SyncHash.PartitionEFI.IsEnabled = $false
+    $SyncHash.PartitionMSR.IsEnabled = $false
+    $SyncHash.PartitionReTools.IsEnabled = $false
+    $SyncHash.PartitionRecovery.IsEnabled = $false
+    $SyncHash.PartitionWindows.IsEnabled = $false
+    $SyncHash.ButtonCheckUpdate.IsEnabled = $false
+    $SyncHash.ButtonUpdate.IsEnabled = $false
+}
+
+$SyncHash.EnableValidObjects = {
     # Enable GUI objects
     $SyncHash.DriveComboBox.IsEnabled = $true
     $SyncHash.RefreshButton.IsEnabled = $true
@@ -1002,6 +984,9 @@ $SyncHash.UpdateObjects = {
     $SyncHash.PartitionReTools.IsEnabled = $true
     $SyncHash.PartitionRecovery.IsEnabled = $true
     $SyncHash.PartitionWindows.IsEnabled = $true
+
+    $SyncHash.ButtonCheckUpdate.IsEnabled = $true
+    $SyncHash.ButtonUpdate.IsEnabled = $true
 
     if ($SyncHash.IsoPath) {
         $SyncHash.FileHashComboBox.IsEnabled = $true
@@ -1035,30 +1020,15 @@ $SyncHash.UpdateObjects = {
     }
 }
 
-$SyncHash.DisableObjects = {
-    # Disable GUI objects
-    $SyncHash.DriveComboBox.IsEnabled = $false
-    $SyncHash.RefreshButton.IsEnabled = $false
-    $SyncHash.BrowseButton.IsEnabled = $false
-    $SyncHash.FileHashComboBox.IsEnabled = $false
-    $SyncHash.FileHashButton.IsEnabled = $false
-    $SyncHash.OSEditionsComboBox.IsEnabled = $false
-    $SyncHash.ButtonBootable.IsEnabled = $false
-    $SyncHash.ButtonInstall.IsEnabled = $false
-    $SyncHash.PartitionEFI.IsEnabled = $false
-    $SyncHash.PartitionMSR.IsEnabled = $false
-    $SyncHash.PartitionReTools.IsEnabled = $false
-    $SyncHash.PartitionRecovery.IsEnabled = $false
-    $SyncHash.PartitionWindows.IsEnabled = $false
-}
 
-$BootPartition = Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty SystemDrive
-$BootDiskIndex = Get-Partition -DriveLetter $BootPartition.Split(":")[0] | Select-Object -ExpandProperty DiskNumber
+# When $SyncHash.WriteOutput.Invoke($object) is called, PowerShell interpret $object as multiple arguments instead of a single array.
+# Method Invoke() does not inherently preserve the array structure.
+# Force the array to be passed as a single argument, include $null to match the expected parameter structure: $SyncHash.WriteOutput.Invoke(@($object, $null))
 
 $SyncHash.WriteOutput = {
-    param ($Output, $ErrorMessage)
+    param ($Object, $ErrorMessage)
 
-    $Output = ($Output | Out-String).Trim() + "`r`n`r`n" + ($ErrorMessage.Exception.Message | Out-String).Trim()
+    $Output = ($Object | Out-String).Trim() + "`r`n`r`n" + ($ErrorMessage.Exception.Message | Out-String).Trim()
     $Output = $Output.Trim() + "`r`n`r`n"
 
     if (-not [string]::IsNullOrWhiteSpace($Output)) {
@@ -1084,7 +1054,7 @@ $SyncHash.UpdateLog = {
 }
 
 # Text Changed Events for Each TextBox
-function HandleTextChanged {
+Function HandleTextChanged {
     param ($sender)
 
     # Replace non-digit characters in the TextBox
@@ -1094,7 +1064,7 @@ function HandleTextChanged {
 }
 
 # Function to populate the USB ComboBox with available USB devices
-function RefreshUsbDevices {
+Function RefreshUsbDevices {
     & $SyncHash.DisableObjects
 
     $SyncHash.DriveComboBox.Items.Clear()
@@ -1125,8 +1095,12 @@ function RefreshUsbDevices {
         $SyncHash.SelectedDrive = $null
     }
 
-    & $SyncHash.UpdateObjects
+    & $SyncHash.EnableValidObjects
 }
+
+# Find the boot disk to exclude it from the list of drives.
+$BootPartition = Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty SystemDrive
+$BootDiskIndex = Get-Partition -DriveLetter $BootPartition.Split(":")[0] | Select-Object -ExpandProperty DiskNumber
 
 # Initial load of USB devices
 RefreshUsbDevices
@@ -1144,7 +1118,7 @@ $SyncHash.DriveComboBox.Add_SelectionChanged({
         $SyncHash.SelectedDrive = $null
     }
 
-    & $SyncHash.UpdateObjects
+    & $SyncHash.EnableValidObjects
 })
 
 # Browse button click event to select an ISO file
@@ -1163,7 +1137,7 @@ $SyncHash.BrowseButton.Add_Click({
 
         $SyncHash.IsoPath = $fileDialog.FileName
         if ($SyncHash.IsoPath) {
-            $SyncHash.IsoPathText.Text = "Path: " + $SyncHash.IsoPath
+            $SyncHash.IsoPathText.Text = "Selected: " + $SyncHash.IsoPath.Split("\")[-1]
         }
 
         $Background.Invoke("GetImageHealth")
@@ -1238,9 +1212,7 @@ $SyncHash.PartitionWindows.Add_LostFocus({
     }
 })
 
-$SyncHash.ScriptRepo.Add_Click({
-    Start-Process $SyncHash.ScriptInfo.Repository
-})
+$SyncHash.ScriptRepo.Add_Click({ Start-Process $SyncHash.ScriptInfo.Repository })
 
 $SyncHash.ButtonCheckUpdate.Add_Click({
     & $SyncHash.DisableObjects
