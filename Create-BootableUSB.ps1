@@ -36,7 +36,7 @@ $ScriptUpdate = {
 
         if ($Action -eq "ButtonUpdate") {
             if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
-                $Content = (Invoke-WebRequest -Uri $Json.Content -UseBasicParsing -ErrorAction Stop).Content
+                $Content = (Invoke-WebRequest -Uri $Json.UrlContent -UseBasicParsing -ErrorAction Stop).Content
 
                 if ($Content -and $SyncHash.ScriptInfo.LocalPath) {
                     try {
