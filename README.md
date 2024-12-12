@@ -86,3 +86,104 @@
     ```
 
 3. Follow the same instructions described in **Step 2**.
+
+---
+---
+
+# Install Windows on a Portable USB Drive
+
+This guide will help you install Windows on a portable USB drive.
+
+---
+
+## Prerequisites:
+- A USB drive with at least **32 GB** size. An HDD or SSD is highly recommended.
+- A Windows ISO file. You can download official versions here:
+  - [Microsoft Windows 10](https://www.microsoft.com/en-us/software-download/windows10)
+  - [Microsoft Windows 11](https://www.microsoft.com/en-us/software-download/windows11)
+- A computer running Windows with **Administrative privileges**.
+
+---
+
+## Step 1: Prepare the USB Drive
+
+First, format and prepare the USB drive to make it bootable. Follow these commands carefully:
+
+### Instructions:
+1. Open Command Prompt as **Administrator**.
+2. Run the following commands, replacing **X** with the correct disk number for your USB drive:
+
+    ```cmd
+    diskpart
+    list disk
+    select disk X
+    clean
+    convert gpt
+    create partition efi size=256
+    format quick fs=fat32 label="System"
+    assign letter="S"
+
+    create partition msr size=512
+    create partition primary size=1024
+    format quick fs=ntfs label="Windows RE Tools"
+    assign letter="T"
+    set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
+    gpt attributes=0x8000000000000001
+
+    create partition primary size=8192
+    format quick fs=ntfs label="Recovery Image"
+    assign letter="R"
+    set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
+    gpt attributes=0x8000000000000001
+
+    create partition primary size=132000
+    format quick fs=ntfs label="Windows"
+    assign letter="W"
+    list volume
+    exit
+    ```
+
+### Explanation:
+- **`diskpart`**: Launches the disk partitioning tool.
+- **`list disk`**: Displays all available disks. Identify your USB drive by its size.
+- **`select disk X`**: Selects the USB drive. Replace **X** with the disk number corresponding to your USB drive.
+- **`clean`**: Deletes all existing data and partitions from the USB drive.
+- **`convert gpt`**: Converts the drive to the GPT partition style (required for UEFI booting).
+- **Partition creation and formatting**:
+  - Creates necessary partitions for EFI, recovery tools, and the Windows installation.
+  - Assigns drive letters (`S`, `T`, `R`, `W`) for easier identification.
+  - Configures recovery and system partitions with appropriate attributes.
+
+---
+
+## Step 2: Deploy Windows Installation
+
+Once your USB drive is ready, apply the Windows image to it.
+
+### Instructions:
+1. Mount the Windows ISO file to a virtual drive (e.g., `D:`).
+2. Open Command Prompt as **Administrator** and run the following commands:
+
+    ```cmd
+    dism /Get-WimInfo /WimFile:D:\sources\install.wim
+    md R:\RecoveryImage
+    copy D:\sources\install.wim R:\RecoveryImage\install.wim
+
+    dism /Apply-Image /ImageFile:R:\RecoveryImage\install.wim /Index:5 /ApplyDir:W:\
+
+    md T:\Recovery\WindowsRE
+    copy W:\Windows\System32\Recovery\winre.wim T:\Recovery\WindowsRE\winre.wim
+
+    bcdboot W:\Windows /s S: /f UEFI
+    W:\Windows\System32\reagentc /setosimage /path R:\RecoveryImage /target W:\Windows /index 5
+    W:\Windows\System32\reagentc /setreimage /path T:\Recovery\WindowsRE /target W:\Windows
+    ```
+
+### Explanation:
+- **`dism /Get-WimInfo`**: Displays details about the Windows image in the `install.wim` file.
+- **`md R:\RecoveryImage`**: Creates a folder on the USB drive for the recovery image.
+- **`copy D:\sources\install.wim`**: Copies the Windows installation image to the USB drive.
+- **`dism /Apply-Image`**: Applies the selected Windows image to the USB drive. Use the appropriate index (e.g., `5` for Windows Pro).
+- **`md T:\Recovery\WindowsRE`**: Creates a folder for Windows Recovery Environment (WinRE).
+- **`bcdboot`**: Configures the USB drive to boot Windows in UEFI mode by copying the boot files.
+- **`reagentc`**: Registers the recovery and system images for Windows.
