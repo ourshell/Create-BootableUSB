@@ -1,8 +1,8 @@
 {
   "Name": "Create-BootableUSB",
   "Version": "1.03",
-  "UrlJson": "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json",
-  "UrlContent": "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1",
-  "UrlRepository": "https://github.com/ourshell/Create-BootableUSB",
+  "Notes": "Works in general with minor gui bugs."
+  "Content": "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1",
+  "Repository": "https://github.com/ourshell/Create-BootableUSB",
   "Developer": "Boris Andonov"
 }
