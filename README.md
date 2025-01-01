@@ -6,6 +6,7 @@ To create a bootable USB drive or install/deploy Windows on it (SSD or HDD is pr
 Alternatively, if you prefer not to change the execution policy or are unsure how to run the script directly, you can download both `Create-BootableUSB.ps1` and `Create-BootableUSB.bat` into the same folder. Then, simply double-click on `Create-BootableUSB.bat` to execute the script with the required administrative permissions.
 
 **Note:** If you prefer to run the script directly (instead of using the batch file), you may need to bypass the execution policy on your system. You can do this by running the following command in an elevated PowerShell prompt:
+
     ```powershell
     Set-ExecutionPolicy Bypass -Scope Process -Force
     ```
