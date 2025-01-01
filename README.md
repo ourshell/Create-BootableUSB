@@ -7,21 +7,8 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 
 **Note:** If you prefer to run the script directly (instead of using the batch file), you may need to bypass the execution policy on your system. You can do this by running the following command in an elevated PowerShell prompt:
 
-    ```cmd
+    ```powershell
     Set-ExecutionPolicy Bypass -Scope Process -Force
-    ```
-
-    ```cmd
-    diskpart
-    list disk
-    select disk #
-    clean
-    create partition primary
-    select partition 1
-    active
-    format fs=fat32 quick
-    assign
-    exit
     ```
 
 ## Key Point
