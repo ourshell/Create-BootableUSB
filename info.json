@@ -1,7 +1,7 @@
 {
   "Name": "Create-BootableUSB",
-  "Version": "1.03",
-  "Notes": "Works in general with minor gui bugs.",
+  "Version": "1.04",
+  "Notes": "`r`nAdded: Introduced a new beta feature to bypass compatibility checks for Windows 10 and 11 installations.`r`nFixed: Addressed minor bugs to enhance script stability and performance.",
   "Content": "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1",
   "Repository": "https://github.com/ourshell/Create-BootableUSB",
   "Developer": "Boris Andonov"
