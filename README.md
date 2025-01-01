@@ -7,9 +7,9 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 
 **Note:** If you prefer to run the script directly (instead of using the batch file), you may need to bypass the execution policy on your system. You can do this by running the following command in an elevated PowerShell prompt:
 
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force
-```
+    ```powershell
+    Set-ExecutionPolicy Bypass -Scope Process -Force
+    ```
 
 ## Key Point
 - **FAT32** is required for booting (supports both BIOS and UEFI).
