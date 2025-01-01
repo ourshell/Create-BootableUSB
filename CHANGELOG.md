@@ -3,6 +3,8 @@
 ## [1.04] - 2024-01-01
 ### Added
 - Introduced a new beta feature to bypass compatibility checks for Windows 10 and 11 installations.
+### Fixed
+- Addressed minor bugs to enhance script stability and performance.
 
 ## [1.03] - 2024-12-12
 ### Added
