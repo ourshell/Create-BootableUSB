@@ -11,6 +11,19 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
     Set-ExecutionPolicy Bypass -Scope Process -Force
     ```
 
+    ```cmd
+    diskpart
+    list disk
+    select disk #
+    clean
+    create partition primary
+    select partition 1
+    active
+    format fs=fat32 quick
+    assign
+    exit
+    ```
+
 ## Key Point
 - **FAT32** is required for booting (supports both BIOS and UEFI).
 
