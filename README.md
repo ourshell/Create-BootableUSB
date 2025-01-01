@@ -11,6 +11,10 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
   Set-ExecutionPolicy Bypass -Scope Process -Force
   ```
 
+# Instruction how to do it manually
+
+---
+
 ## Key Point
 - **FAT32** is required for booting (supports both BIOS and UEFI).
 
