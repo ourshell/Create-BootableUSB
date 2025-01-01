@@ -1,5 +1,4 @@
 # Create a Bootable USB Drive
-# Create a Bootable USB Drive
 
 ## Overview
 To create a bootable USB drive, you can use the `Create-BootableUSB.ps1` script. Simply download the `Create-BootableUSB.ps1` file, run it as an administrator, and follow the instructions. 
