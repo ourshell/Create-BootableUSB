@@ -43,7 +43,7 @@ This method involves modifying the Windows 11 installation files to remove the T
 
 ### Step-by-Step Instructions:
 1. **Mount the ISO or Extract Files**:
-   - Use a tool like [Rufus](https://rufus.ie/) to create a bootable USB or simply mount the ISO on your computer.
+   - Simply right-click the ISO file and select "Mount" to mount it on your computer.
 
 2. **Delete the `appraiserres.dll` File**:
    - Navigate to the `sources` folder in the installation media.
