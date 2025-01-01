@@ -9,7 +9,7 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
-
+```
 
 ## Key Point
 - **FAT32** is required for booting (supports both BIOS and UEFI).
