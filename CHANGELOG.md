@@ -1,7 +1,5 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
 ## [1.03] - 2024-12-12
 ### Added
 - Update functionality to ensure the script can be easily upgraded.
