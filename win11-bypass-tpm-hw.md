@@ -67,10 +67,3 @@ If VBS or Hyper-V is enabled, it may interfere with installation. Here's how to 
      ```bash
      dism.exe /Online /Disable-Feature:Microsoft-Hyper-V-All
      ```
-
----
-
-### Important Notes:
-- Ensure you back up your data before making any changes to your system.
-- These methods may violate Microsoft's terms of service, so use them at your own risk.
-- Always use official Windows installation media and tools for the best results.
