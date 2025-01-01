@@ -52,6 +52,10 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 ### Commands:
 1. Make the USB bootable:
 
+    ```powershell
+    Set-ExecutionPolicy Bypass -Scope Process -Force
+    ```
+
     ```cmd
     D:\boot\bootsect.exe /nt60 E:
     ```
