@@ -28,44 +28,44 @@ $ScriptUpdate = {
     $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     $output = "================ Begin: $TimeStamp ================`r`n`r`n"
     $output += "Checking for new version, please wait . . ."
-    $SyncHash.UpdateLog.Invoke(@($output, $Error))
+    $SyncHash.UpdateLog.Invoke($output)
 
     try {
         $Json = Invoke-RestMethod -Uri $SyncHash.ScriptInfo.Json -UseBasicParsing -Method Get -ErrorAction Stop
-        $SyncHash.UpdateLog.Invoke("Local Version: $($SyncHash.ScriptInfo.Version)`r`nLatest Version: $($Json.Version)")
+        $SyncHash.UpdateLog.Invoke("Current Version: $($SyncHash.ScriptInfo.Version)`r`nLatest Version: $($Json.Version)")
+
+        $NewVersion = [double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version
+
+        if ($NewVersion) {
+            $SyncHash.UpdateLog.Invoke("New Version Notes: $($Json.Notes)")
+        }
+        else {
+            $SyncHash.UpdateLog.Invoke("There is no new version.")
+            break
+        }
 
         if ($Action -eq "ButtonUpdate") {
-            if ([double]$Json.Version -gt [double]$SyncHash.ScriptInfo.Version) {
-                $Content = (Invoke-WebRequest -Uri $Json.UrlContent -UseBasicParsing -ErrorAction Stop).Content
+            $Content = (Invoke-WebRequest -Uri $Json.Content -UseBasicParsing -ErrorAction Stop).Content
 
-                if ($Content -and $SyncHash.ScriptInfo.LocalPath) {
-                    try {
-                        Set-Content -Path $SyncHash.ScriptInfo.LocalPath -Value $Content -Force -ErrorAction Stop
-                        $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.")
-                    } catch {
-                        $SyncHash.UpdateLog.Invoke("Unable to update the script due to an internal error.", $_)
-                    }
-                } else {
-                    $SyncHash.UpdateLog.Invoke("Missing script's local path or repo is not available.")
-                }
-            } else {
-                $SyncHash.UpdateLog.Invoke("There is no new version.")
+            if ($Content -and $SyncHash.ScriptInfo.Path) {
+                Set-Content -Path $SyncHash.ScriptInfo.Path -Value $Content -Force -ErrorAction Stop
+                $SyncHash.UpdateLog.Invoke("Update finished successfully. Restart the script to take effect.")
             }
-        } else {
-            $SyncHash.UpdateLog.Invoke("If there is a new version, you can proceed with the update.")
+            else {
+                $SyncHash.UpdateLog.Invoke("Unable to update the script. Missing local file path or repo is not available:`r`n`r`n$_")
+            }
         }
-    } catch {
-        $SyncHash.UpdateLog.Invoke("An error occurred while checking for updates.", $_)
-    } finally {
-        $SyncHash.UpdateLog.Invoke("Finished!")
-
+    }
+    catch {
+        $SyncHash.UpdateLog.Invoke("Internal Error Occurred. Unable to update the script.`r`n`r`n$_")
+    }
+    finally {
         # Enable GUI objects after completion
-        $SyncHash.Window.Dispatcher.Invoke([action] {
-            & $SyncHash.EnableValidObjects
-            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            $SyncHash.TextBoxUpdate.AppendText("================ End: $TimeStamp ================`r`n`r`n")
-            $SyncHash.TextBoxUpdate.ScrollToEnd()
-        })
+        $SyncHash.Window.Dispatcher.Invoke([action] { $SyncHash.EnableValidObjects.Invoke() })
+
+        $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $output = "Finished!`r`n`r`n" + "================ End: $TimeStamp ================"
+        $SyncHash.UpdateLog.Invoke($output)
     }
 }
 
@@ -77,7 +77,7 @@ $GetImageHealth = {
     $output += "Selected File: $($SyncHash.IsoPath)`r`n"
     $output += "The selected image is being verified, please wait . . ."
 
-    $SyncHash.WriteOutput.Invoke(@($output, $Error))
+    $SyncHash.WriteOutput.Invoke($output)
 
     try {
         $Image = Get-DiskImage -ImagePath $SyncHash.IsoPath -ErrorAction Stop
@@ -101,25 +101,27 @@ $GetImageHealth = {
                     $SyncHash.OSEditionsComboBox.Items.Add($ComboBoxItem) | Out-Null
                 }
             })
-        } else {
+        }
+        else {
             $SyncHash.WriteOutput.Invoke("No Windows Editions found!`r`nIf it's Linux, VMware or other bootable ISO, you can still burn it on a USB drive.")
         }
-    } catch {
-        $SyncHash.WriteOutput.Invoke("Error occurred:", $_)
-    } finally {
-        $SyncHash.WriteOutput.Invoke("Finished!")
-
+    }
+    catch {
+        $SyncHash.WriteOutput.Invoke("Error occurred:`r`n`r`n$_")
+    }
+    finally {
         # Enable GUI objects after completion
         $SyncHash.Window.Dispatcher.Invoke([action] {
             if ($SyncHash.OSEditionsComboBox.Items) {
                 $SyncHash.OSEditionsComboBox.SelectedIndex = 0
             }
 
-            & $SyncHash.EnableValidObjects
-            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            $SyncHash.OutputTextBox.AppendText("================ End: $TimeStamp ================`r`n`r`n")
-            $SyncHash.OutputTextBox.ScrollToEnd()
+            $SyncHash.EnableValidObjects.Invoke()
         })
+
+        $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $output = "Finished!`r`n`r`n" + "================ End: $TimeStamp ================"
+        $SyncHash.WriteOutput.Invoke($output)
     }
 }
 
@@ -133,23 +135,22 @@ $GetFileHash = {
     $output += "Selected File: $($SyncHash.IsoPath)`r`n"
     $output += "Calculating Hash $algorithm, please wait . . ."
 
-    $SyncHash.WriteOutput.Invoke($output, $Error)
+    $SyncHash.WriteOutput.Invoke($output)
 
     try {
         $hash = Get-FileHash -Path $SyncHash.IsoPath -Algorithm $algorithm -ErrorAction Stop
         $SyncHash.WriteOutput.Invoke($hash.Hash)
-    } catch {
-        $SyncHash.WriteOutput.Invoke("Error occurred during hash calculation.", $_)
-    } finally {
-        $SyncHash.WriteOutput.Invoke("Finished!")
-
+    }
+    catch {
+        $SyncHash.WriteOutput.Invoke("Error occurred during hash calculation:`r`n`r`n$_")
+    }
+    finally {
         # Enable GUI objects after completion
-        $SyncHash.Window.Dispatcher.Invoke([action] {
-            & $SyncHash.EnableValidObjects
-            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            $SyncHash.OutputTextBox.AppendText("================ End: $TimeStamp ================`r`n`r`n")
-            $SyncHash.OutputTextBox.ScrollToEnd()
-        })
+        $SyncHash.Window.Dispatcher.Invoke([action] { $SyncHash.EnableValidObjects.Invoke() })
+
+        $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $output = "Finished!`r`n`r`n" + "================ End: $TimeStamp ================"
+        $SyncHash.WriteOutput.Invoke($output)
     }
 }
 
@@ -162,72 +163,85 @@ $CreateBootableDrive = {
     $output += "Selected Image: $($SyncHash.IsoPath)`r`n"
     $output += "Repartitioning the drive . . ."
 
-    $SyncHash.WriteOutput.Invoke(@($output, $Error))
+    $SyncHash.WriteOutput.Invoke($output)
+
+    Clear-Disk -Number $SyncHash.SelectedDrive.Index -RemoveData -RemoveOEM -Confirm:$false -ErrorAction SilentlyContinue
+    $Error.Clear()
+    Start-Sleep -Seconds 1
 
     try {
-        if ($SyncHash.SelectedDrive.Size -le (32 * 1GB)) {
-            $DrivePartition2 = $false
+        $PartitionStyle = Get-Disk | Where-Object {$_.DiskNumber -eq $SyncHash.SelectedDrive.Index} | Select-Object -ExpandProperty PartitionStyle
 
-            $DiskPartScript = "select disk $($SyncHash.SelectedDrive.Index)" + "`r`n"
-            $DiskPartScript += "clean" + "`r`n"
-            $DiskPartScript += "create partition primary" + "`r`n"
-            $DiskPartScript += "select partition 1" + "`r`n"
-            $DiskPartScript += "active" + "`r`n"
-            $DiskPartScript += "format fs=fat32 quick" + "`r`n"
-            $DiskPartScript += "assign" + "`r`n"
-            $DiskPartScript += "exit" + "`r`n"
-        } else {
-            $DrivePartition2 = $true
-            $PartitionSize = [math]::Min([System.Math]::Floor($SyncHash.SelectedDrive.Size / 2MB), 32 * 1024)
-
-            $DiskPartScript = "select disk $($SyncHash.SelectedDrive.Index)" + "`r`n"
-            $DiskPartScript += "clean" + "`r`n"
-            $DiskPartScript += "create partition primary size=$PartitionSize" + "`r`n"
-            $DiskPartScript += "select partition 1" + "`r`n"
-            $DiskPartScript += "active" + "`r`n"
-            $DiskPartScript += "format fs=fat32 quick label=`"BOOT-FAT32`"" + "`r`n"
-            $DiskPartScript += "assign" + "`r`n"
-            $DiskPartScript += "create partition primary" + "`r`n"
-            $DiskPartScript += "select partition 2" + "`r`n"
-            $DiskPartScript += "format fs=ntfs quick label=`"DATA-NTFS`"" + "`r`n"
-            $DiskPartScript += "assign" + "`r`n"
-            $DiskPartScript += "exit" + "`r`n"
+        if ($PartitionStyle -eq "RAW") {
+            Initialize-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle MBR
+            Start-Sleep -Seconds 1
         }
 
-        # $DiskPartOutput = diskpart.exe /s ([System.IO.Path]::GetTempFileName() | Set-Content -Value $DiskPartScript -PassThru) 2>&1
-        $DiskPartOutput = $DiskPartScript | diskpart 2>&1 | Out-String
+        if ($SyncHash.SelectedDrive.Size -le (32 * 1GB)) {
+            $PrimaryPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize -IsActive -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            Format-Volume -Partition $PrimaryPartition -FileSystem FAT32 -NewFileSystemLabel "BOOT-FAT32" -Confirm:$false -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            Add-PartitionAccessPath -DiskNumber $PrimaryPartition.DiskNumber -PartitionNumber $PrimaryPartition.PartitionNumber -AssignDriveLetter -ErrorAction Stop
+            Start-Sleep -Seconds 1
+        }
+        else {
+            $PrimaryPartitionSize = [math]::Min($SyncHash.SelectedDrive.Size / 2, 32GB)
 
-        $SyncHash.WriteOutput.Invoke($DiskPartOutput)
+            $PrimaryPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PrimaryPartitionSize -IsActive -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            Format-Volume -Partition $PrimaryPartition -FileSystem FAT32 -NewFileSystemLabel "BOOT-FAT32" -Confirm:$false -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            Add-PartitionAccessPath -DiskNumber $PrimaryPartition.DiskNumber -PartitionNumber $PrimaryPartition.PartitionNumber -AssignDriveLetter -ErrorAction Stop
+            Start-Sleep -Seconds 1
+
+            $SecondaryPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            Format-Volume -Partition $SecondaryPartition -FileSystem NTFS -NewFileSystemLabel "DATA-NTFS" -Confirm:$false -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            Add-PartitionAccessPath -DiskNumber $SecondaryPartition.DiskNumber -PartitionNumber $SecondaryPartition.PartitionNumber -AssignDriveLetter -ErrorAction Stop
+            Start-Sleep -Seconds 1
+        }
+
         $SyncHash.WriteOutput.Invoke("Burning ISO Image . . .")
 
+        $FlashDrive = $PrimaryPartition | Get-Partition -ErrorAction Stop | Select-Object -ExpandProperty DriveLetter
         Start-Sleep -Seconds 2
 
-        $FlashDrive = Get-Partition -DiskNumber $SyncHash.SelectedDrive.Index -PartitionNumber 1 -ErrorAction Stop | Select-Object -ExpandProperty DriveLetter
-
         if (Test-Path -Path "$($SyncHash.IsoDrive)`:\boot\bootsect.exe") {
-            $output = "Updating the boot code from $FlashDrive`: to $($SyncHash.IsoDrive)`:"
+            $output = "Updating the boot code from $($SyncHash.IsoDrive)`: to $FlashDrive`:"
             $SyncHash.WriteOutput.Invoke($output)
 
-            $BootSectOutput = cmd /c "$($SyncHash.IsoDrive)`:\boot\bootsect.exe /nt60 $FlashDrive`:" 2>&1 | Out-String
-            $SyncHash.WriteOutput.Invoke($BootSectOutput)
+            $output = cmd /c "$($SyncHash.IsoDrive)`:\boot\bootsect.exe /nt60 $FlashDrive`:" 2>&1 | Out-String
+            $SyncHash.WriteOutput.Invoke($output)
         }
 
         $source = "$($SyncHash.IsoDrive)`:\"
         $destination = "$FlashDrive`:\"
         $MaxSize = 4294967296  # 4 GB in bytes
 
-        $SyncHash.WriteOutput.Invoke("Copying files from $source to $destination")
+        $SyncHash.WriteOutput.Invoke("Copying files from $source to $destination . . .")
         $output = ""
+
+        $ImageCollection  = Get-ChildItem -Path $source -Recurse -ErrorAction Stop
+        if ($SyncHash.BypassCompatibilityCheck) {
+            $ImageCollection = $ImageCollection | Where-Object {$_.PSIsContainer -or $_.Name -ne "appraiserres.dll"}
+        }
 
         Get-ChildItem -Path $source -Recurse -ErrorAction Stop | ForEach-Object {
             $DestPath = Join-Path -Path $destination -ChildPath ($_.FullName -replace [regex]::Escape($source), "") -ErrorAction Stop
 
             if ($_.PSIsContainer) {
-                New-Item -ItemType Directory -Path $DestPath -Force -ErrorAction Stop | Out-Null
-            } elseif ($_.Length -le $MaxSize) {
-                Copy-Item -Path $_.FullName -Destination $DestPath -Force -ErrorAction Stop | Out-Null
-            } else {
+                New-Item -ItemType Directory -Path $DestPath -Force -ErrorAction Stop
+            }
+            elseif ($SyncHash.BypassCompatibilityCheck -and $_.Name -eq "appraiserres.dll") {
+                $output += "Skip file '$($_.FullName)' to bypass compatibility check.`r`n"
+            }
+            elseif ($_.Length -gt $MaxSize) {
                 $output += "Skip file '$($_.FullName)' with size $($_.Length) bytes. The size is over 4GB for FAT32`r`n"
+            }
+            else {
+                Copy-Item -Path $_.FullName -Destination $DestPath -Force -ErrorAction Stop
             }
         }
 
@@ -237,21 +251,21 @@ $CreateBootableDrive = {
             $output = "DISM: Split file '$($source)sources\install.wim' to '$($destination)sources\install.swm'"
             $SyncHash.WriteOutput.Invoke($output)
 
-            $DismOutput = cmd /c "dism /Split-Image /ImageFile:$($source)sources\install.wim /SWMFile:$($destination)sources\install.swm /FileSize:4096" 2>&1 | Out-String
+            $output = cmd /c "dism /Split-Image /ImageFile:$($source)sources\install.wim /SWMFile:$($destination)sources\install.swm /FileSize:4096" 2>&1 | Out-String
 
-            $SyncHash.WriteOutput.Invoke($DismOutput)
+            $SyncHash.WriteOutput.Invoke($output)
         }
-    } catch {
-        $SyncHash.WriteOutput.Invoke("Error during operation:", $_)
-    } finally {
-        $SyncHash.WriteOutput.Invoke("Finished!")
+    }
+    catch {
+        $SyncHash.WriteOutput.Invoke("Error during operation:`r`n`r`n$_")
+    }
+    finally {
+        # Enable GUI objects after completion
+        $SyncHash.Window.Dispatcher.Invoke([action] { $SyncHash.EnableValidObjects.Invoke() })
 
-        $SyncHash.Window.Dispatcher.Invoke([action] {
-            & $SyncHash.EnableValidObjects
-            $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            $SyncHash.OutputTextBox.AppendText("================ End: $TimeStamp ================`r`n`r`n")
-            $SyncHash.OutputTextBox.ScrollToEnd()
-        })
+        $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $output = "Finished!`r`n`r`n" + "================ End: $TimeStamp ================"
+        $SyncHash.WriteOutput.Invoke($output)
     }
 }
 
@@ -270,180 +284,195 @@ $InstallWindowsOnDrive = {
 
     $output += "Repartitioning the drive . . ."
 
-    $SyncHash.WriteOutput.Invoke($output, $Error)
+    $SyncHash.WriteOutput.Invoke($output)
+
+    Clear-Disk -Number $SyncHash.SelectedDrive.Index -RemoveData -RemoveOEM -Confirm:$false -ErrorAction SilentlyContinue
     $Error.Clear()
-
-    Clear-Disk -Number $SyncHash.SelectedDrive.Index -RemoveData -RemoveOEM -Confirm:$false
-    Start-Sleep -Seconds 1
-    Initialize-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT
-    Start-Sleep -Seconds 1
-    Set-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT
     Start-Sleep -Seconds 1
 
-    $efiPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.efi -GptType "{C12A7328-F81F-11D2-BA4B-00A0C93EC93B}"
-    Format-Volume -Partition $efiPartition -FileSystem FAT32 -NewFileSystemLabel "System" -Confirm:$false
-    Start-Sleep -Seconds 1
+    try {
+        $PartitionStyle = Get-Disk | Where-Object {$_.DiskNumber -eq $SyncHash.SelectedDrive.Index} | Select-Object -ExpandProperty PartitionStyle
 
-    $msrPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.msr -GptType "{E3C9E316-0B5C-4DB8-817D-F92DF00215AE}"
-    Start-Sleep -Seconds 1
+        if ($PartitionStyle -eq "RAW") {
+            Initialize-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT -ErrorAction Stop
+        }
+        else {
+            Set-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT -ErrorAction Stop
+        }
 
-    $reToolsPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.retools -GptType "{DE94BBA4-06D1-4D40-A16A-BFD50179D6AC}"
-    Format-Volume -Partition $reToolsPartition -FileSystem NTFS -NewFileSystemLabel "Windows RE Tools" -Confirm:$false
-    Start-Sleep -Seconds 1
-
-    $recoveryImagePartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.recovery -GptType "{DE94BBA4-06D1-4D40-A16A-BFD50179D6AC}"
-    Format-Volume -Partition $recoveryImagePartition -FileSystem NTFS -NewFileSystemLabel "Recovery Image" -Confirm:$false
-    Start-Sleep -Seconds 1
-
-    if ($PartitionSize.windows -eq "max") {
-        $windowsPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize
-    }
-    else {
-        $windowsPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.windows
-    }
-
-    Format-Volume -Partition $windowsPartition -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false
-    Start-Sleep -Seconds 1
-
-    $Unallocated = Get-Disk -Number $SyncHash.SelectedDrive.Index | Select-Object -ExpandProperty LargestFreeExtent
-    $DataPartition = $null
-
-    # Check if there is an unallocated space. Applies if custom Windows partition size is set. The minimum requirement for NTFS partition is 16MB
-    if ($Unallocated -gt 16MB) {
-        $DataPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize
-        Format-Volume -Partition $DataPartition -FileSystem NTFS -NewFileSystemLabel "DATA" -Confirm:$false
         Start-Sleep -Seconds 1
+
+        $efiPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.efi -GptType "{C12A7328-F81F-11D2-BA4B-00A0C93EC93B}" -ErrorAction Stop
+        Format-Volume -Partition $efiPartition -FileSystem FAT32 -NewFileSystemLabel "System" -Confirm:$false -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        $msrPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.msr -GptType "{E3C9E316-0B5C-4DB8-817D-F92DF00215AE}" -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        $reToolsPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.retools -GptType "{DE94BBA4-06D1-4D40-A16A-BFD50179D6AC}" -ErrorAction Stop
+        Format-Volume -Partition $reToolsPartition -FileSystem NTFS -NewFileSystemLabel "Windows RE Tools" -Confirm:$false -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        $recoveryImagePartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.recovery -GptType "{DE94BBA4-06D1-4D40-A16A-BFD50179D6AC}" -ErrorAction Stop
+        Format-Volume -Partition $recoveryImagePartition -FileSystem NTFS -NewFileSystemLabel "Recovery Image" -Confirm:$false -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        if ($PartitionSize.windows -eq "max") {
+            $windowsPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize -ErrorAction Stop
+        }
+        else {
+            $windowsPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.windows -ErrorAction Stop
+        }
+
+        Format-Volume -Partition $windowsPartition -FileSystem NTFS -NewFileSystemLabel "Windows" -Confirm:$false -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        $Unallocated = Get-Disk -Number $SyncHash.SelectedDrive.Index | Select-Object -ExpandProperty LargestFreeExtent -ErrorAction Stop
+        $DataPartition = $null
+
+        # Check if there is an unallocated space. Applies if custom Windows partition size is set. The minimum requirement for NTFS partition is 16MB
+        if ($Unallocated -gt 16MB) {
+            $DataPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize -ErrorAction Stop
+            Format-Volume -Partition $DataPartition -FileSystem NTFS -NewFileSystemLabel "DATA" -Confirm:$false -ErrorAction Stop
+            Start-Sleep -Seconds 1
+        }
+
+        $output = "Assigning custom GPT attributes for partitions 'Windows RE Tools' and 'Recovery Image' . . ."
+        $SyncHash.WriteOutput.Invoke($output)
+
+        $diskpart = "select disk $($SyncHash.SelectedDrive.Index)`r`n"
+        $diskpart += "select partition $($reToolsPartition.PartitionNumber)`r`n"
+        $diskpart += "gpt attributes=0x8000000000000001`r`n"
+        $diskpart += "select partition $($recoveryImagePartition.PartitionNumber)`r`n"
+        $diskpart += "gpt attributes=0x8000000000000001`r`n"
+        $diskpart += "exit"
+
+        #### Alternative commands for custom attributes 0x8000000000000001
+        # attributes volume set recovery
+        # attributes volume set bootable
+
+        $output = $diskpart | diskpart.exe 2>&1 | Out-String
+        $SyncHash.WriteOutput.Invoke($output)
+
+        $output = "Internal script preparation for deployment. Modules, symlinks, folders, files . . ."
+        $SyncHash.WriteOutput.Invoke($output)
+
+        Start-Sleep -Seconds 1
+
+        if (Test-Path -Path "$env:TEMP\Create-BootableUSB") {
+            Remove-Item -Path "$env:TEMP\Create-BootableUSB" -Recurse -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+        }
+
+        Import-Module DISM -ErrorAction Stop
+
+        $efi = $efiPartition | Select-Object -First 1 -ExpandProperty AccessPaths
+        $retools = $reToolsPartition | Select-Object -First 1 -ExpandProperty AccessPaths
+        $recovery = $recoveryImagePartition | Select-Object -First 1 -ExpandProperty AccessPaths
+        $windows = $windowsPartition | Select-Object -First 1 -ExpandProperty AccessPaths
+
+        New-Item -ItemType Directory "$env:TEMP\Create-BootableUSB" -Force -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\efi`" `"$efi`""
+        cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\retools`" `"$retools`""
+        cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\recovery`" `"$recovery`""
+        cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\windows`" `"$windows`""
+
+        $efi = "$env:TEMP\Create-BootableUSB\efi"
+        $retools = "$env:TEMP\Create-BootableUSB\retools"
+        $recovery = "$env:TEMP\Create-BootableUSB\recovery"
+        $windows = "$env:TEMP\Create-BootableUSB\windows"
+
+        New-Item -ItemType Directory "$recovery\RecoveryImage" -Force -ErrorAction Stop
+        New-Item -ItemType Directory -Path "$retools\Recovery\WindowsRE" -Force -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        $output = "Copy '$($SyncHash.IsoDrive)`:\sources\install.wim' to '$recovery\RecoveryImage\install.wim'"
+        $SyncHash.WriteOutput.Invoke($output)
+
+        Copy-Item -Path "$($SyncHash.IsoDrive)`:\sources\install.wim" -Destination "$recovery\RecoveryImage\install.wim" -ErrorAction Stop
+
+        $output = "DISM: Deploy '$($SyncHash.IsoDrive)`:\sources\install.wim' to $windows"
+        $SyncHash.WriteOutput.Invoke($output)
+
+        $output = cmd /c "dism /Apply-Image /ImageFile:$($SyncHash.IsoDrive)`:\sources\install.wim /Index:$($SyncHash.SelectedOSEdition.ImageIndex) /ApplyDir:$windows" 2>&1 | Out-String
+        $SyncHash.WriteOutput.Invoke($output)
+
+        $output = "Copy '$windows\Windows\System32\Recovery\winre.wim' to '$retools\Recovery\WindowsRE\winre.wim'"
+        $SyncHash.WriteOutput.Invoke($output)
+
+        Copy-Item -Path "$windows\Windows\System32\Recovery\winre.wim" -Destination "$retools\Recovery\WindowsRE\winre.wim" -ErrorAction Stop
+
+        $output = "Updating boot code and configure Windows Recovery Environment . . ."
+        $SyncHash.WriteOutput.Invoke($output)
+
+        Add-PartitionAccessPath -DiskNumber $windowsPartition.DiskNumber -PartitionNumber $windowsPartition.PartitionNumber -AssignDriveLetter -ErrorAction Stop
+        $WinDrive = Get-Partition -DiskNumber $windowsPartition.DiskNumber -PartitionNumber $windowsPartition.PartitionNumber | Select-Object -ExpandProperty DriveLetter -ErrorAction Stop
+
+        Add-PartitionAccessPath -DiskNumber $efiPartition.DiskNumber -PartitionNumber $efiPartition.PartitionNumber -AssignDriveLetter -ErrorAction Stop
+        $efiDrive = Get-Partition -DiskNumber $efiPartition.DiskNumber -PartitionNumber $efiPartition.PartitionNumber | Select-Object -ExpandProperty DriveLetter -ErrorAction Stop
+
+        Start-Sleep -Seconds 2
+
+        # Boot Configuration
+        $output  = cmd /c "bcdboot `"$WinDrive`:\Windows`" /s $efiDrive`: /f UEFI" 2>&1 | Out-String
+
+        # Setting the OS Image for Recovery
+        $output += cmd /c "$WinDrive`:\Windows\System32\reagentc /setosimage /path $recovery\RecoveryImage /target $WinDrive`:\Windows /index $($SyncHash.SelectedOSEdition.ImageIndex)" 2>&1 | Out-String
+
+        # Setting the Recovery Environment
+        $output += cmd /c "$WinDrive`:\Windows\System32\reagentc /setreimage /path $retools\Recovery\WindowsRE /target $WinDrive`:\Windows" 2>&1 | Out-String
+
+        # Enabling the Recovery Environment
+        $output += cmd /c "$winDrive`:\Windows\System32\reagentc /enable /target $WinDrive`:\Windows" 2>&1 | Out-String
+
+        $SyncHash.WriteOutput.Invoke($output)
+        Start-Sleep -Seconds 2
+
+        # Remove-PartitionAccessPath -DiskNumber $windowsPartition.DiskNumber -PartitionNumber $windowsPartition.PartitionNumber -AccessPath "$WinDrive`:\"
+        Remove-PartitionAccessPath -DiskNumber $efiPartition.DiskNumber -PartitionNumber $efiPartition.PartitionNumber -AccessPath "$efiDrive`:\" -ErrorAction SilentlyContinue
+
+        if ($DataPartition) {
+            Add-PartitionAccessPath -DiskNumber $DataPartition.DiskNumber -PartitionNumber $DataPartition.PartitionNumber -AssignDriveLetter -ErrorAction SilentlyContinue
+        }
+
+        # Dismount-DiskImage -ImagePath $File
     }
-
-    $output = "Assigning custom GPT attributes for partitions 'Windows RE Tools' and 'Recovery Image' . . ."
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    $diskpart = (@"
-select disk $($SyncHash.SelectedDrive.Index)
-select partition $($reToolsPartition.PartitionNumber)
-gpt attributes=0x8000000000000001
-select partition $($recoveryImagePartition.PartitionNumber)
-gpt attributes=0x8000000000000001
-exit
-"@ | diskpart.exe 2>&1)
-
-    $output = ($diskpart | Out-String).Trim()
-    $output += "Internal script preparation for deployment. Modules, symlinks, folders, files . . ."
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    Start-Sleep -Seconds 1
-
-    if (Test-Path -Path "$env:TEMP\Create-BootableUSB") {
-        Remove-Item -Path "$env:TEMP\Create-BootableUSB" -Recurse -Force
+    catch {
+        $SyncHash.WriteOutput.Invoke("Error during operation:`r`n`r`n$_")
     }
+    finally {
+        # Enable GUI objects after completion
+        $SyncHash.Window.Dispatcher.Invoke([action] { $SyncHash.EnableValidObjects.Invoke() })
 
-    Import-Module DISM
-
-    $efi = $efiPartition | Select-Object -First 1 -ExpandProperty AccessPaths
-    $retools = $reToolsPartition | Select-Object -First 1 -ExpandProperty AccessPaths
-    $recovery = $recoveryImagePartition | Select-Object -First 1 -ExpandProperty AccessPaths
-    $windows = $windowsPartition | Select-Object -First 1 -ExpandProperty AccessPaths
-
-    New-Item -ItemType Directory "$env:TEMP\Create-BootableUSB" -Force | Out-Null
-    Start-Sleep -Seconds 1
-
-    cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\efi`" `"$efi`""
-    cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\retools`" `"$retools`""
-    cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\recovery`" `"$recovery`""
-    cmd.exe /c "mklink /D `"$env:TEMP\Create-BootableUSB\windows`" `"$windows`""
-
-    $efi = "$env:TEMP\Create-BootableUSB\efi"
-    $retools = "$env:TEMP\Create-BootableUSB\retools"
-    $recovery = "$env:TEMP\Create-BootableUSB\recovery"
-    $windows = "$env:TEMP\Create-BootableUSB\windows"
-
-    New-Item -ItemType Directory "$recovery\RecoveryImage" -Force | Out-Null
-    New-Item -ItemType Directory -Path "$retools\Recovery\WindowsRE" -Force | Out-Null
-    Start-Sleep -Seconds 1
-
-    $output = "Copy '$($SyncHash.IsoDrive)`:\sources\install.wim' to '$recovery\RecoveryImage\install.wim'"
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    Copy-Item -Path "$($SyncHash.IsoDrive)`:\sources\install.wim" -Destination "$recovery\RecoveryImage\install.wim"
-
-    $output = "DISM: Deploy '$($SyncHash.IsoDrive)`:\sources\install.wim' to $windows"
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    $output = (cmd /c "dism /Apply-Image /ImageFile:$($SyncHash.IsoDrive)`:\sources\install.wim /Index:$($SyncHash.SelectedOSEdition.ImageIndex) /ApplyDir:$windows 2>&1" | Out-String).Trim() + "`r`n`r`n"
-
-    $output += "Copy '$windows\Windows\System32\Recovery\winre.wim' to '$retools\Recovery\WindowsRE\winre.wim'"
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    Copy-Item -Path "$windows\Windows\System32\Recovery\winre.wim" -Destination "$retools\Recovery\WindowsRE\winre.wim"
-
-    $output = "Updating boot code and configure Windows Recovery Environment . . ."
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    Add-PartitionAccessPath -DiskNumber $windowsPartition.DiskNumber -PartitionNumber $windowsPartition.PartitionNumber -AssignDriveLetter
-    $WinDrive = Get-Partition -DiskNumber $windowsPartition.DiskNumber -PartitionNumber $windowsPartition.PartitionNumber | Select-Object -ExpandProperty DriveLetter
-
-    Add-PartitionAccessPath -DiskNumber $efiPartition.DiskNumber -PartitionNumber $efiPartition.PartitionNumber -AssignDriveLetter
-    $efiDrive = Get-Partition -DiskNumber $efiPartition.DiskNumber -PartitionNumber $efiPartition.PartitionNumber | Select-Object -ExpandProperty DriveLetter
-
-    Start-Sleep -Seconds 4
-
-    $output  = (cmd /c "bcdboot `"$WinDrive`:\Windows`" /s $efiDrive`: /f UEFI 2>&1" | Out-String).Trim() + "`r`n`r`n"
-    $output += (cmd /c "$WinDrive`:\Windows\System32\reagentc /setosimage /path $recovery\RecoveryImage /target $WinDrive`:\Windows /index $($SyncHash.SelectedOSEdition.ImageIndex) 2>&1" | Out-String).Trim() + "`r`n`r`n"
-    $output += (cmd /c "$WinDrive`:\Windows\System32\reagentc /setreimage /path $retools\Recovery\WindowsRE /target $WinDrive`:\Windows 2>&1" | Out-String).Trim() + "`r`n`r`n"
-
-    # Enable Windows RE
-    $output += (cmd /c "$winDrive`:\Windows\System32\reagentc /enable /target $WinDrive`:\Windows 2>&1" | Out-String).Trim() + "`r`n`r`n"
-
-    Start-Sleep -Seconds 2
-
-    # Remove-PartitionAccessPath -DiskNumber $windowsPartition.DiskNumber -PartitionNumber $windowsPartition.PartitionNumber -AccessPath "$WinDrive`:\"
-    Remove-PartitionAccessPath -DiskNumber $efiPartition.DiskNumber -PartitionNumber $efiPartition.PartitionNumber -AccessPath "$efiDrive`:\"
-
-    if ($DataPartition) {
-        Add-PartitionAccessPath -DiskNumber $DataPartition.DiskNumber -PartitionNumber $DataPartition.PartitionNumber -AssignDriveLetter
+        $TimeStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $output = "Finished!`r`n`r`n" + "================ End: $TimeStamp ================"
+        $SyncHash.WriteOutput.Invoke($output)
     }
-
-    # Dismount-DiskImage -ImagePath $File
-
-    $output += "Finished!"
-    $SyncHash.WriteOutput.Invoke($output, $Error)
-    $Error.Clear()
-
-    # Enable GUI objects after completion
-    $SyncHash.Window.Dispatcher.Invoke([action] {
-        & $SyncHash.EnableValidObjects
-        $SyncHash.OutputTextBox.AppendText("================ End: $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss")) ================`r`n`r`n")
-        $SyncHash.OutputTextBox.ScrollToEnd()
-    })
 }
 
 # Define the background task that will execute in a new runspace.
 $Background = {
-    param ([Parameter(Mandatory=$true)] [string]$ClickedButton)
+    param ([Parameter(Mandatory=$true)] [string]$Action)
 
     # Create a new PowerShell instance and add particular scriptblock to it.
 
-    if ($ClickedButton -eq "ButtonCheckUpdate" -or $ClickedButton -eq "ButtonUpdate") {
+    if ($Action -eq "ButtonCheckUpdate" -or $Action -eq "ButtonUpdate") {
         $psInstance = [PowerShell]::Create().AddScript($ScriptUpdate)
-        $psInstance.AddArgument($ClickedButton)
+        $psInstance.AddArgument($Action)
     }
-    elseif ($ClickedButton -eq "GetImageHealth") {
+    elseif ($Action -eq "GetImageHealth") {
         $psInstance = [PowerShell]::Create().AddScript($GetImageHealth)
     }
-    elseif ($ClickedButton -eq "GetFileHash") {
+    elseif ($Action -eq "GetFileHash") {
         $psInstance = [PowerShell]::Create().AddScript($GetFileHash)
         $psInstance.AddArgument($SyncHash.FileHashComboBox.Text)
     }
-    elseif ($ClickedButton -eq "CreateBootableDrive") {
+    elseif ($Action -eq "CreateBootableDrive") {
         $psInstance = [PowerShell]::Create().AddScript($CreateBootableDrive)
     }
-    elseif ($ClickedButton -eq "InstallWindowsOnDrive") {
+    elseif ($Action -eq "InstallWindowsOnDrive") {
         $PartitionSize = @{
             efi = [int64]$SyncHash.PartitionEFI.Text * 1MB
             msr = [int64]$SyncHash.PartitionMSR.Text * 1MB
@@ -770,6 +799,7 @@ W:\Windows\System32\reagentc /setreimage /path T:\Recovery\WindowsRE /target W:\
                         <Button x:Name="FileHashButton" Content="Get Hash" Width="75" Height="25" Margin="0,0,0,0"/>
                         <Button x:Name="ButtonBootable" Content="Create Bootable Drive" Width="130" Height="25" Margin="50,0,0,0"/>
                         <Button x:Name="ButtonInstall" Content="Install Windows on Drive" Width="160" Height="25" Margin="50,0,0,0"/>
+                        <CheckBox Name="BoxBypassCompatibilityCheck" Content="Bypass Compatibility Check" IsChecked="False" ToolTip="Applies only for Windows 11. Beta testing, may not be reliable." Margin="50,5,0,0"/>
                     </StackPanel>
 
                     <!-- Big Text Box-->
@@ -901,6 +931,7 @@ $SyncHash.FileHashButton = $SyncHash.Window.FindName("FileHashButton")
 $SyncHash.IsoPathText = $SyncHash.Window.FindName("IsoPathText")
 $SyncHash.ButtonBootable = $SyncHash.Window.FindName("ButtonBootable")
 $SyncHash.ButtonInstall = $SyncHash.Window.FindName("ButtonInstall")
+$SyncHash.BoxBypassCompatibilityCheck = $SyncHash.Window.FindName("BoxBypassCompatibilityCheck")
 $SyncHash.OSEditionsComboBox = $SyncHash.Window.FindName("OSEditionsComboBox")
 $SyncHash.PartitionEFI = $SyncHash.Window.FindName("PartitionEFI")
 $SyncHash.PartitionMSR = $SyncHash.Window.FindName("PartitionMSR")
@@ -918,6 +949,7 @@ $SyncHash.ButtonUpdate = $SyncHash.Window.FindName("ButtonUpdate")
 $SyncHash.TextBoxUpdate = $SyncHash.Window.FindName("TextBoxUpdate")
 
 $SyncHash.FileHashComboBox.SelectedIndex = 2
+$SyncHash.BypassCompatibilityCheck = $false
 $SyncHash.PartitionEFI.Text = "256"
 $SyncHash.PartitionMSR.Text = "512"
 $SyncHash.PartitionReTools.Text = "1024"
@@ -936,9 +968,10 @@ $SyncHash.IsoPath = $null
 $SyncHash.IsoDrive = $null
 
 $SyncHash.ScriptInfo = @{
-    LocalPath = $MyInvocation.MyCommand.Path
+    Path = $MyInvocation.MyCommand.Path
     Name = "Create-BootableUSB"
-    Version= "1.03"
+    Version= "1.04"
+    Notes = "Introduced a new beta feature to bypass compatibility checks for Windows 10 and 11 installations. Addressed minor bugs to enhance script stability and performance."
     Website = "https://github.com/ourshell/"
     Json = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/info.json"
     Content = "https://raw.githubusercontent.com/ourshell/Create-BootableUSB/refs/heads/main/Create-BootableUSB.ps1"
@@ -964,6 +997,7 @@ $SyncHash.DisableObjects = {
     $SyncHash.OSEditionsComboBox.IsEnabled = $false
     $SyncHash.ButtonBootable.IsEnabled = $false
     $SyncHash.ButtonInstall.IsEnabled = $false
+    $SyncHash.BoxBypassCompatibilityCheck.IsEnabled = $false
     $SyncHash.PartitionEFI.IsEnabled = $false
     $SyncHash.PartitionMSR.IsEnabled = $false
     $SyncHash.PartitionReTools.IsEnabled = $false
@@ -978,7 +1012,8 @@ $SyncHash.EnableValidObjects = {
     $SyncHash.DriveComboBox.IsEnabled = $true
     $SyncHash.RefreshButton.IsEnabled = $true
     $SyncHash.BrowseButton.IsEnabled = $true
-    
+    $SyncHash.BoxBypassCompatibilityCheck.IsEnabled = $true
+
     $SyncHash.PartitionEFI.IsEnabled = $true
     $SyncHash.PartitionMSR.IsEnabled = $true
     $SyncHash.PartitionReTools.IsEnabled = $true
@@ -1026,10 +1061,9 @@ $SyncHash.EnableValidObjects = {
 # Force the array to be passed as a single argument, include $null to match the expected parameter structure: $SyncHash.WriteOutput.Invoke(@($object, $null))
 
 $SyncHash.WriteOutput = {
-    param ($Object, $ErrorMessage)
+    param ($Message)
 
-    $Output = ($Object | Out-String).Trim() + "`r`n`r`n" + ($ErrorMessage.Exception.Message | Out-String).Trim()
-    $Output = $Output.Trim() + "`r`n`r`n"
+    $Output = ($Message | Out-String).Trim() + "`r`n`r`n"
 
     if (-not [string]::IsNullOrWhiteSpace($Output)) {
         $SyncHash.Window.Dispatcher.Invoke([action] {
@@ -1040,10 +1074,9 @@ $SyncHash.WriteOutput = {
 }
 
 $SyncHash.UpdateLog = {
-    param ($Output, $ErrorMessage)
+    param ($Message)
 
-    $Output = ($Output | Out-String).Trim() + "`r`n`r`n" + ($ErrorMessage.Exception.Message | Out-String).Trim()
-    $Output = $Output.Trim() + "`r`n`r`n"
+    $Output = ($Message | Out-String).Trim() + "`r`n`r`n"
 
     if (-not [string]::IsNullOrWhiteSpace($Output)) {
         $SyncHash.Window.Dispatcher.Invoke([action] {
@@ -1105,9 +1138,6 @@ $BootDiskIndex = Get-Partition -DriveLetter $BootPartition.Split(":")[0] | Selec
 # Initial load of USB devices
 RefreshUsbDevices
 
-# Event handler for refreshing the USB list
-$SyncHash.RefreshButton.Add_Click({ RefreshUsbDevices })
-
 # Update the selected disk based on dropdown selection
 $SyncHash.DriveComboBox.Add_SelectionChanged({
     if ($SyncHash.DriveComboBox.SelectedIndex -ne -1) {
@@ -1120,6 +1150,9 @@ $SyncHash.DriveComboBox.Add_SelectionChanged({
 
     & $SyncHash.EnableValidObjects
 })
+
+# Event handler for refreshing the USB list
+$SyncHash.RefreshButton.Add_Click({ RefreshUsbDevices })
 
 # Browse button click event to select an ISO file
 $SyncHash.BrowseButton.Add_Click({
@@ -1165,6 +1198,15 @@ $SyncHash.ButtonInstall.Add_Click({
     & $SyncHash.DisableObjects
     $SyncHash.SelectedOSEdition = $SyncHash.OSEditions | Select-Object -Index $SyncHash.OSEditionsComboBox.SelectedIndex
     $Background.Invoke("InstallWindowsOnDrive")
+})
+
+$SyncHash.BoxBypassCompatibilityCheck.Add_Click({
+    if ($SyncHash.BoxBypassCompatibilityCheck.IsChecked) {
+        $SyncHash.BypassCompatibilityCheck = $true
+    }
+    else {
+        $SyncHash.BypassCompatibilityCheck = $false
+    }
 })
 
 # Attach TextChanged event handler for each TextBox
