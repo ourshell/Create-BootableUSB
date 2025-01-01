@@ -105,7 +105,6 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 3. Follow the same instructions described in **Step 2**.
 
 ---
----
 
 # Install Windows on a Portable USB Drive
 
