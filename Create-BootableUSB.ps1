@@ -173,9 +173,12 @@ $CreateBootableDrive = {
         $PartitionStyle = Get-Disk | Where-Object {$_.DiskNumber -eq $SyncHash.SelectedDrive.Index} | Select-Object -ExpandProperty PartitionStyle
 
         if ($PartitionStyle -eq "RAW") {
-            Initialize-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle MBR
+            Initialize-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle MBR -ErrorAction Stop
             Start-Sleep -Seconds 1
         }
+
+        Set-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle MBR -ErrorAction Stop
+        Start-Sleep -Seconds 1
 
         if ($SyncHash.SelectedDrive.Size -le (32 * 1GB)) {
             $PrimaryPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -UseMaximumSize -IsActive -ErrorAction Stop
@@ -295,11 +298,10 @@ $InstallWindowsOnDrive = {
 
         if ($PartitionStyle -eq "RAW") {
             Initialize-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT -ErrorAction Stop
-        }
-        else {
-            Set-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT -ErrorAction Stop
+            Start-Sleep -Seconds 1
         }
 
+        Set-Disk -Number $SyncHash.SelectedDrive.Index -PartitionStyle GPT -ErrorAction Stop
         Start-Sleep -Seconds 1
 
         $efiPartition = New-Partition -DiskNumber $SyncHash.SelectedDrive.Index -Size $PartitionSize.efi -GptType "{C12A7328-F81F-11D2-BA4B-00A0C93EC93B}" -ErrorAction Stop
