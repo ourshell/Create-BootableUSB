@@ -15,6 +15,8 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 
 ---
 
+## Bootable USB Drive
+
 ## Key Point
 - **FAT32** is required for booting (supports both BIOS and UEFI).
 
