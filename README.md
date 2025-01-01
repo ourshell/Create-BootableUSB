@@ -108,8 +108,6 @@ Alternatively, if you prefer not to change the execution policy or are unsure ho
 
 # Install Windows on a Portable USB Drive
 
-This guide will help you install Windows on a portable USB drive.
-
 ---
 
 ## Prerequisites:
