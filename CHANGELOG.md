@@ -1,18 +1,18 @@
-# Changelog / Create-BootableUSB.ps1
+# Changelog for Create-BootableUSB.ps1
 
 ## [1.03] - 2024-12-12
 ### Added
-- Update functionality to ensure the script can be easily upgraded.
+- Introduced update functionality to allow the script to be easily upgraded.
 
 ## [1.02] - 2024-12-11
 ### Fixed
-- Minor bug fixes to improve stability.
+- Resolved minor bugs to improve stability and performance.
 
 ## [1.01] - 2024-12-10
 ### Added
-- Documentation updates: included a "Know-how" section to guide users.
+- Expanded documentation: added a "Know-how" section to provide user guidance.
 
 ## [1.00] - 2024-12-09
 ### Added
-- Initial release of the `Create-BootableUSB` script.
-- Core functionality for creating bootable USB drives.
+- Initial release of the `Create-BootableUSB.ps1` script.
+- Core features for creating bootable USB drives, including formatting and partitioning.
